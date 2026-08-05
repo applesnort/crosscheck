@@ -1,0 +1,477 @@
+{
+  "corpus": "OWASP Benchmark v1.2",
+  "source": "https://github.com/OWASP-Benchmark/BenchmarkJava",
+  "note": "Not vendored. Fetch with scripts/fetch-corpus.sh. Sample drawn by the pre-registered rule: first N true and N false per category, ascending by test number.",
+  "perLabel": 3,
+  "totalCasesAvailable": 2740,
+  "vulnerableAvailable": 1415,
+  "safeAvailable": 1325,
+  "sampled": 66,
+  "sampledVulnerable": 33,
+  "sampledSafe": 33,
+  "shortfalls": [],
+  "cases": [
+    {
+      "name": "BenchmarkTest00006",
+      "category": "cmdi",
+      "cwe": 78,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00006.java"
+    },
+    {
+      "name": "BenchmarkTest00007",
+      "category": "cmdi",
+      "cwe": 78,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00007.java"
+    },
+    {
+      "name": "BenchmarkTest00015",
+      "category": "cmdi",
+      "cwe": 78,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00015.java"
+    },
+    {
+      "name": "BenchmarkTest00051",
+      "category": "cmdi",
+      "cwe": 78,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00051.java"
+    },
+    {
+      "name": "BenchmarkTest00090",
+      "category": "cmdi",
+      "cwe": 78,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00090.java"
+    },
+    {
+      "name": "BenchmarkTest00093",
+      "category": "cmdi",
+      "cwe": 78,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00093.java"
+    },
+    {
+      "name": "BenchmarkTest00005",
+      "category": "crypto",
+      "cwe": 327,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00005.java"
+    },
+    {
+      "name": "BenchmarkTest00019",
+      "category": "crypto",
+      "cwe": 327,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00019.java"
+    },
+    {
+      "name": "BenchmarkTest00020",
+      "category": "crypto",
+      "cwe": 327,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00020.java"
+    },
+    {
+      "name": "BenchmarkTest00054",
+      "category": "crypto",
+      "cwe": 327,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00054.java"
+    },
+    {
+      "name": "BenchmarkTest00058",
+      "category": "crypto",
+      "cwe": 327,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00058.java"
+    },
+    {
+      "name": "BenchmarkTest00059",
+      "category": "crypto",
+      "cwe": 327,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00059.java"
+    },
+    {
+      "name": "BenchmarkTest00003",
+      "category": "hash",
+      "cwe": 328,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00003.java"
+    },
+    {
+      "name": "BenchmarkTest00029",
+      "category": "hash",
+      "cwe": 328,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00029.java"
+    },
+    {
+      "name": "BenchmarkTest00046",
+      "category": "hash",
+      "cwe": 328,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00046.java"
+    },
+    {
+      "name": "BenchmarkTest00009",
+      "category": "hash",
+      "cwe": 328,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00009.java"
+    },
+    {
+      "name": "BenchmarkTest00022",
+      "category": "hash",
+      "cwe": 328,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00022.java"
+    },
+    {
+      "name": "BenchmarkTest00069",
+      "category": "hash",
+      "cwe": 328,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00069.java"
+    },
+    {
+      "name": "BenchmarkTest00012",
+      "category": "ldapi",
+      "cwe": 90,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00012.java"
+    },
+    {
+      "name": "BenchmarkTest00021",
+      "category": "ldapi",
+      "cwe": 90,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00021.java"
+    },
+    {
+      "name": "BenchmarkTest00044",
+      "category": "ldapi",
+      "cwe": 90,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00044.java"
+    },
+    {
+      "name": "BenchmarkTest00138",
+      "category": "ldapi",
+      "cwe": 90,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00138.java"
+    },
+    {
+      "name": "BenchmarkTest00139",
+      "category": "ldapi",
+      "cwe": 90,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00139.java"
+    },
+    {
+      "name": "BenchmarkTest00367",
+      "category": "ldapi",
+      "cwe": 90,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00367.java"
+    },
+    {
+      "name": "BenchmarkTest00001",
+      "category": "pathtraver",
+      "cwe": 22,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00001.java"
+    },
+    {
+      "name": "BenchmarkTest00002",
+      "category": "pathtraver",
+      "cwe": 22,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00002.java"
+    },
+    {
+      "name": "BenchmarkTest00011",
+      "category": "pathtraver",
+      "cwe": 22,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00011.java"
+    },
+    {
+      "name": "BenchmarkTest00063",
+      "category": "pathtraver",
+      "cwe": 22,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00063.java"
+    },
+    {
+      "name": "BenchmarkTest00064",
+      "category": "pathtraver",
+      "cwe": 22,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00064.java"
+    },
+    {
+      "name": "BenchmarkTest00131",
+      "category": "pathtraver",
+      "cwe": 22,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00131.java"
+    },
+    {
+      "name": "BenchmarkTest00087",
+      "category": "securecookie",
+      "cwe": 614,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00087.java"
+    },
+    {
+      "name": "BenchmarkTest00169",
+      "category": "securecookie",
+      "cwe": 614,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00169.java"
+    },
+    {
+      "name": "BenchmarkTest00170",
+      "category": "securecookie",
+      "cwe": 614,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00170.java"
+    },
+    {
+      "name": "BenchmarkTest00016",
+      "category": "securecookie",
+      "cwe": 614,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00016.java"
+    },
+    {
+      "name": "BenchmarkTest00088",
+      "category": "securecookie",
+      "cwe": 614,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00088.java"
+    },
+    {
+      "name": "BenchmarkTest00089",
+      "category": "securecookie",
+      "cwe": 614,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00089.java"
+    },
+    {
+      "name": "BenchmarkTest00008",
+      "category": "sqli",
+      "cwe": 89,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00008.java"
+    },
+    {
+      "name": "BenchmarkTest00018",
+      "category": "sqli",
+      "cwe": 89,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00018.java"
+    },
+    {
+      "name": "BenchmarkTest00024",
+      "category": "sqli",
+      "cwe": 89,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00024.java"
+    },
+    {
+      "name": "BenchmarkTest00052",
+      "category": "sqli",
+      "cwe": 89,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00052.java"
+    },
+    {
+      "name": "BenchmarkTest00104",
+      "category": "sqli",
+      "cwe": 89,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00104.java"
+    },
+    {
+      "name": "BenchmarkTest00105",
+      "category": "sqli",
+      "cwe": 89,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00105.java"
+    },
+    {
+      "name": "BenchmarkTest00004",
+      "category": "trustbound",
+      "cwe": 501,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00004.java"
+    },
+    {
+      "name": "BenchmarkTest00031",
+      "category": "trustbound",
+      "cwe": 501,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00031.java"
+    },
+    {
+      "name": "BenchmarkTest00098",
+      "category": "trustbound",
+      "cwe": 501,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00098.java"
+    },
+    {
+      "name": "BenchmarkTest00097",
+      "category": "trustbound",
+      "cwe": 501,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00097.java"
+    },
+    {
+      "name": "BenchmarkTest00099",
+      "category": "trustbound",
+      "cwe": 501,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00099.java"
+    },
+    {
+      "name": "BenchmarkTest00189",
+      "category": "trustbound",
+      "cwe": 501,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00189.java"
+    },
+    {
+      "name": "BenchmarkTest00023",
+      "category": "weakrand",
+      "cwe": 330,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00023.java"
+    },
+    {
+      "name": "BenchmarkTest00066",
+      "category": "weakrand",
+      "cwe": 330,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00066.java"
+    },
+    {
+      "name": "BenchmarkTest00067",
+      "category": "weakrand",
+      "cwe": 330,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00067.java"
+    },
+    {
+      "name": "BenchmarkTest00010",
+      "category": "weakrand",
+      "cwe": 330,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00010.java"
+    },
+    {
+      "name": "BenchmarkTest00042",
+      "category": "weakrand",
+      "cwe": 330,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00042.java"
+    },
+    {
+      "name": "BenchmarkTest00094",
+      "category": "weakrand",
+      "cwe": 330,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00094.java"
+    },
+    {
+      "name": "BenchmarkTest00207",
+      "category": "xpathi",
+      "cwe": 643,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00207.java"
+    },
+    {
+      "name": "BenchmarkTest00442",
+      "category": "xpathi",
+      "cwe": 643,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00442.java"
+    },
+    {
+      "name": "BenchmarkTest00607",
+      "category": "xpathi",
+      "cwe": 643,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00607.java"
+    },
+    {
+      "name": "BenchmarkTest00116",
+      "category": "xpathi",
+      "cwe": 643,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00116.java"
+    },
+    {
+      "name": "BenchmarkTest00117",
+      "category": "xpathi",
+      "cwe": 643,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00117.java"
+    },
+    {
+      "name": "BenchmarkTest00118",
+      "category": "xpathi",
+      "cwe": 643,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00118.java"
+    },
+    {
+      "name": "BenchmarkTest00013",
+      "category": "xss",
+      "cwe": 79,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00013.java"
+    },
+    {
+      "name": "BenchmarkTest00014",
+      "category": "xss",
+      "cwe": 79,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00014.java"
+    },
+    {
+      "name": "BenchmarkTest00030",
+      "category": "xss",
+      "cwe": 79,
+      "vulnerable": true,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00030.java"
+    },
+    {
+      "name": "BenchmarkTest00147",
+      "category": "xss",
+      "cwe": 79,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00147.java"
+    },
+    {
+      "name": "BenchmarkTest00151",
+      "category": "xss",
+      "cwe": 79,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00151.java"
+    },
+    {
+      "name": "BenchmarkTest00275",
+      "category": "xss",
+      "cwe": 79,
+      "vulnerable": false,
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00275.java"
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+
+# External defect corpus — fetched by scripts/fetch-corpus.sh, never vendored
+corpus/
