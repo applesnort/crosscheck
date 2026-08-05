@@ -196,3 +196,34 @@ run, between consensus and solo findings drawn from the same model on the same
 corpus. Memorisation would have to affect consensus and solo findings
 differentially to bias that, which there is no reason to expect. Stated here so
 it cannot be raised later as though it were concealed.
+
+## Round 2 addendum — a second security-capable lens, declared before running
+
+Building the adapter surfaced a flaw in the experiment. OWASP Benchmark is
+entirely security cases, and in this roster only `security-check` owns security —
+`check` and `architect` both name "security categories" in their `not-owns`. So no
+finding on this corpus could ever be reported by two lenses, and consensus could
+never form. The corpus would measure false-positive rate well and leave the
+consensus claim exactly as untestable as before.
+
+Testing agreement requires at least two competent, independent observers in the
+domain under test. A single-domain corpus therefore needs a second
+security-capable lens. Adding one is a requirement of the measurement, not a
+thumb on the scale — but it is declared here, before the run, with the
+constraints that keep it honest:
+
+- **Written without looking at any corpus case.** The lens is authored from the
+  method alone. No Benchmark file is read while writing it.
+- **A genuinely different method, not a paraphrase.** `security-check` works from
+  OWASP categories and CWE checklists — a taxonomy walk. The new `taint` lens
+  works sink-first: enumerate the dangerous operations, trace each argument back
+  toward its origin, and ask whether anything sanitises it in between. Same
+  domain, different reasoning path. That is precisely the "two lenses that
+  overlap in domain but not in method" case the independence weighting exists to
+  score.
+- **No tuning toward agreement.** The lens is not adjusted after any run, and its
+  overlap with `security-check` is measured, not assumed.
+
+If the two lenses turn out to be highly redundant, the independence weighting
+should *discount* their agreement — and that outcome is as interesting as the
+alternative. It is reported either way.
