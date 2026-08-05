@@ -116,3 +116,83 @@ ground truth — that is the p-hacking route this file exists to block. It needs
 target where the lenses genuinely err: real production code with independent
 ground truth, or a defect corpus someone else built. Until such a run exists, the
 consensus weighting remains an unvalidated hypothesis, and the README says so.
+
+---
+
+# Round 2 — external corpus. Criteria fixed 2026-08-05, before any run.
+
+The first three rounds could not test the claim because the lenses never erred,
+and every decoy was written by the same person who wrote the ground truth, the
+lens prompts, and the scorer. That circularity is the flaw. This round removes it
+by using a corpus authored by someone else.
+
+## Corpus
+
+[OWASP Benchmark](https://owasp.org/www-project-benchmark/) v1.2 — 2,740
+self-contained Java servlets, each carrying one intentional CWE and a label in
+`expectedresults-1.2.csv`:
+
+- **1,415 labeled `true`** — the vulnerability is real.
+- **1,325 labeled `false`** — the code follows the same taint path into a *safe*
+  sink. It looks vulnerable and is not.
+
+Those 1,325 are the point. They are externally authored false-positive
+opportunities, which is exactly what three rounds of hand-made decoys failed to
+produce.
+
+The corpus is not vendored into this repository. `licenseInfo` reports null on the
+upstream repo, so no assumption is made about redistribution terms: a fetch
+script clones it locally, it is gitignored, and only the adapter, the sample
+manifest, and the resulting scores are committed.
+
+## Sampling rule — fixed here, applied mechanically
+
+For each of the 11 categories, take the **first 3 `true` and first 3 `false`
+cases by ascending test number**. Up to 66 cases, balanced by construction and
+reproducible by anyone. Where a category holds fewer than 3 of a label, take what
+exists and state the shortfall.
+
+No hand-picking, and no re-drawing the sample after seeing results. The manifest
+is committed before the run.
+
+## Scoring
+
+Benchmark labels a whole test case, not a line, so line-span matching does not
+apply. A finding **matches** a case when it cites the case's CWE number or its
+category vocabulary. Then:
+
+- label `true` + match → true positive
+- label `true` + no match → missed
+- label `false` + match → **false positive**
+- label `false` + no match → correctly declined
+
+Only findings matching the expected CWE count either way. A lens reporting some
+unrelated real issue in a `false` case is neither credited nor penalised, and the
+count of those is reported separately.
+
+## Falsification criteria
+
+Given at least 3 false positives — which this corpus should finally supply:
+
+- **Claim supported** if consensus precision exceeds solo precision by ≥10
+  percentage points.
+- **Claim refuted** if consensus precision is at or below solo precision. The
+  consensus score is then removed from the README's headline and demoted to an
+  implementation detail.
+- **Inconclusive** otherwise, and reported as such.
+
+Unchanged from round 1: every run reported, no threshold tuning against these
+runs, no post-hoc sample changes.
+
+## Declared threat to validity
+
+OWASP Benchmark is synthetic, widely published, and almost certainly present in
+model training data. Absolute recall may therefore be inflated by memorisation
+and should not be quoted as evidence the lenses are good.
+
+This does **not** undermine the measurement being made here. The question is
+whether agreement between lenses predicts correctness — a comparison *within* the
+run, between consensus and solo findings drawn from the same model on the same
+corpus. Memorisation would have to affect consensus and solo findings
+differentially to bias that, which there is no reason to expect. Stated here so
+it cannot be raised later as though it were concealed.
