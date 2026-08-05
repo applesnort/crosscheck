@@ -227,3 +227,96 @@ test('scoring nothing does not crash or invent a score', () => {
   assert.equal(result.recall, null);
   assert.equal(result.consensusPrecision, null);
 });
+
+// --- case-level agreement ---
+
+import { lensCaseOverlap, scoreCaseAgreement } from '../lib/corpus.mjs';
+
+const SQL = 'SQL injection via concatenated query [CWE-89]';
+const lensFinding = (lens, issue, line = 30) =>
+  ({ lens, file: 'T.java', line, severity: 'BLOCK', issue, fix: 'fix it' });
+
+test('two lenses on one case count as agreement regardless of line anchor', () => {
+  const result = scoreCaseAgreement([{
+    testCase: caseFor('sqli', true),
+    findings: [
+      lensFinding('security-check', SQL, 30),
+      // far from the other anchor: source vs sink in the same servlet
+      lensFinding('taint', 'header → concat → executeQuery, no escaping [CWE-89]', 71)
+    ]
+  }]);
+  assert.equal(result.consensusCount, 1,
+    'line distance must not split a case-level agreement');
+  assert.equal(result.soloCount, 0);
+  assert.equal(result.truePositives, 1);
+});
+
+test('one lens on a case is a solo detection', () => {
+  const result = scoreCaseAgreement([{
+    testCase: caseFor('sqli', true),
+    findings: [lensFinding('security-check', SQL)]
+  }]);
+  assert.equal(result.soloCount, 1);
+  assert.equal(result.consensusCount, 0);
+});
+
+test('the same lens twice on one case is not agreement', () => {
+  const result = scoreCaseAgreement([{
+    testCase: caseFor('sqli', true),
+    findings: [
+      lensFinding('security-check', SQL, 30),
+      lensFinding('security-check', SQL, 55)
+    ]
+  }]);
+  assert.equal(result.consensusCount, 0);
+  assert.equal(result.soloCount, 1);
+});
+
+test('consensus and solo precision are measured over case detections', () => {
+  const result = scoreCaseAgreement([
+    { testCase: { ...caseFor('sqli', true), name: 'A' },
+      findings: [lensFinding('security-check', SQL), lensFinding('taint', SQL)] },
+    { testCase: { ...caseFor('sqli', false), name: 'B' },
+      findings: [lensFinding('security-check', SQL)] },
+    { testCase: { ...caseFor('sqli', false), name: 'C' },
+      findings: [] }
+  ]);
+  assert.equal(result.consensusPrecision, 1, 'the agreed case was real');
+  assert.equal(result.soloPrecision, 0, 'the solo case was safe');
+  assert.equal(result.falsePositives, 1);
+  assert.equal(result.declined, 1);
+  assert.equal(result.specificity, 0.5);
+});
+
+test('unrelated findings do not create a detection', () => {
+  const result = scoreCaseAgreement([{
+    testCase: caseFor('sqli', false),
+    findings: [
+      lensFinding('architect', 'this servlet mixes transport and persistence'),
+      lensFinding('check', 'the loop bound is off by one')
+    ]
+  }]);
+  assert.equal(result.detections, 0);
+  assert.equal(result.falsePositives, 0);
+  assert.equal(result.declined, 1);
+  assert.equal(result.unrelatedFindings, 2);
+});
+
+test('lens overlap on cases is measured, not assumed', () => {
+  const results = [
+    { testCase: { ...caseFor('sqli', true), name: 'A' },
+      findings: [lensFinding('security-check', SQL), lensFinding('taint', SQL)] },
+    { testCase: { ...caseFor('sqli', true), name: 'B' },
+      findings: [lensFinding('security-check', SQL)] }
+  ];
+  // both flagged A; only security-check flagged B -> 1 shared of 2 union
+  assert.equal(lensCaseOverlap(results)['security-check|taint'], 0.5);
+});
+
+test('scoring no cases yields nulls, not fabricated numbers', () => {
+  const result = scoreCaseAgreement([]);
+  assert.equal(result.cases, 0);
+  assert.equal(result.consensusPrecision, null);
+  assert.equal(result.soloPrecision, null);
+  assert.equal(result.recall, null);
+});

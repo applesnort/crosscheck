@@ -227,3 +227,89 @@ constraints that keep it honest:
 If the two lenses turn out to be highly redundant, the independence weighting
 should *discount* their agreement — and that outcome is as interesting as the
 alternative. It is reported either way.
+
+---
+
+# Round 2 outcome — recorded 2026-08-05
+
+66 OWASP Benchmark cases, 33 vulnerable and 33 safe, two lenses
+(`security-check`, `taint`), three batches each. All six agents completed. Zero
+unparsed lines, zero unmapped findings.
+
+| | |
+|---|---|
+| recall | **97.0%** (32/33) |
+| specificity | **97.0%** (32/33) |
+| false positives | **1** |
+| unrelated findings | 3 (neither credited nor penalised) |
+| consensus detections | 15, precision **93.3%** |
+| solo detections | 18, precision **100.0%** |
+| measured lens overlap | 0.4545 |
+
+## Verdict: INCONCLUSIVE
+
+The criteria require at least 3 false positives. This run produced **1**, so the
+comparison is inconclusive and the claim is neither supported nor refuted.
+
+Consensus precision came out *below* solo precision, 93.3% against 100%. That is
+directionally against the claim, and it is tempting to call it a refutation — the
+criteria deliberately forbid that. One false positive cannot separate a real
+effect from noise, and a rule that only binds when the result is unwelcome is not
+a rule. Recorded as inconclusive.
+
+## The single false positive is the most informative result here
+
+`BenchmarkTest00052`, a safe `sqli` case, was flagged by **both** lenses.
+
+The case builds `"{call " + param + "}"` and executes it, which is the vulnerable
+idiom exactly. But `param` comes from
+`SeparateClassRequest.getTheValue("BenchmarkTest00052")`, and that helper
+**returns the constant `"bar"`**, ignoring its argument. The value is never
+attacker-controlled and the SQL is not injectable.
+
+Both lenses inferred taint from the helper's *name*. The class is called
+`SeparateClassRequest`, it is constructed from the request, and its sibling
+methods (`getTheParameter`, `getTheCookie`) really are request accessors. Neither
+lens opened the helper.
+
+Two consequences worth more than the headline numbers:
+
+**Independence of method did not produce independence of failure.** The lenses
+reason differently — one walks CWE categories, the other traces sinks backward —
+and the overlap measurement confirms they are only ~45% redundant. They still
+failed identically, because both had to resolve the same opaque helper and both
+guessed from its name. Consensus cannot filter an error whose *cause* is shared.
+That is a real limit on what agreement-weighting can do, and it is invisible in
+any evaluation where the lenses do not err.
+
+**A caveat in the prompt does not prevent the behaviour it warns about.**
+`lenses/taint.md` names this exact mistake twice — "a sink whose argument is
+trusted" and "a sanitiser you did not recognise… the origin is `unknown`, and the
+correct output is either silence or a `CONSIDER`". The lens described its own
+failure mode and then committed it. Prompt-stated discipline is not enforcement.
+
+## The one miss
+
+`BenchmarkTest00098`, `trustbound`. Trust-boundary violations — untrusted data
+written into a session attribute — have no dangerous sink to trace and no
+recognisable category idiom, so neither lens's method reaches them.
+
+## Threat to validity, restated
+
+97% recall *and* 97% specificity on a public benchmark almost certainly reflects
+some memorisation; the corpus is widely published and predates the models. Those
+two figures should not be quoted as evidence the lenses are good.
+
+The within-run consensus-versus-solo comparison is less exposed to that, but the
+run failed to test it for a different reason: the lenses were nearly always
+right, so there was almost nothing for consensus to discriminate. Three rounds of
+self-authored fixtures and one round of external corpus have all failed the same
+way. The obstacle is not fixture quality — it is that these lenses, on
+benchmark-shaped code, do not make enough mistakes to measure a mistake filter.
+
+Testing the claim needs targets where competent review genuinely errs: real
+production code with independent ground truth, ambiguous cases with expert
+disagreement, or a corpus built to defeat exactly the shortcut seen here — an
+opaque helper whose behaviour contradicts its name. That last idea comes from
+this run's single false positive, and building a fixture around it would be
+legitimate only with new criteria fixed in advance.
