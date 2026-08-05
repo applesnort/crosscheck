@@ -85,7 +85,7 @@
       "alsoAcceptedBy": [
         "check"
       ],
-      "summary": "no ownership check, so any authenticated caller can read another user's session",
+      "summary": "getSessionForUser accepts callerUserId and never compares it to record.session.userId, so any caller holding a token reads that session regardless of whose it is",
       "span": [
         46,
         52

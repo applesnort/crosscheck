@@ -1,4 +1,4 @@
-# audit-panel
+# crosscheck
 
 Run several independent review lenses over the same change in parallel, then merge
 their findings into one deduped, consensus-ranked report — and emit it as
@@ -7,8 +7,8 @@ already do.
 
 ```bash
 # your harness dispatches the lenses and collects their text; this does the rest
-audit-panel report --in run.json
-audit-panel sarif  --in run.json --lenses lenses --out panel.sarif
+crosscheck report --in run.json
+crosscheck sarif  --in run.json --lenses lenses --out panel.sarif
 ```
 
 The panel is a foreman, not a reviewer. It resolves the target, decides which
@@ -38,8 +38,8 @@ lens, and for a set, 1 plus the summed independence of every distinct pair, wher
 independence is `1 − overlap` measured from a real run:
 
 ```bash
-audit-panel overlap --in run.json --out overlap.json   # measure it
-audit-panel report  --in run.json --overlap overlap.json
+crosscheck overlap --in run.json --out overlap.json   # measure it
+crosscheck report  --in run.json --overlap overlap.json
 ```
 
 Two unrelated lenses agreeing scores `2.0`. Two fully redundant ones score `1.0` —
@@ -98,8 +98,8 @@ On an existing codebase the first run returns everything already wrong, and the
 report gets closed unread. Record it, then report only what changed:
 
 ```bash
-audit-panel baseline --in first-run.json --out .audit-panel-baseline.json
-audit-panel report   --in run.json --baseline .audit-panel-baseline.json
+crosscheck baseline --in first-run.json --out .crosscheck-baseline.json
+crosscheck report   --in run.json --baseline .crosscheck-baseline.json
 ```
 
 Suppressed counts are always reported, and baseline entries that stopped appearing
@@ -113,7 +113,7 @@ whether a new lens helped, or whether a prompt edit made it worse. `fixtures/cal
 holds a file with defects planted at known lines, and:
 
 ```bash
-audit-panel calibrate --in run.json --expected fixtures/calibration/expected.json
+crosscheck calibrate --in run.json --expected fixtures/calibration/expected.json
 ```
 
 reports recall, precision, per-lens recall against only the defects that lens
@@ -164,7 +164,7 @@ lib/
   baseline.mjs          baseline record / filter / staleness
   lenses.mjs            frontmatter, glob routing, roster validation
   calibrate.mjs         score a run against planted defects
-bin/audit-panel.mjs     CLI: report | sarif | baseline | overlap | calibrate
+bin/crosscheck.mjs     CLI: report | sarif | baseline | overlap | calibrate
 fixtures/calibration/   planted defects + ground truth
 PROVENANCE.md           where all of this came from
 ```

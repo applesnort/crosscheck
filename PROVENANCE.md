@@ -33,7 +33,7 @@ vendored, and no code was adapted from another project.
 `lib/sarif.mjs` targets SARIF 2.1.0 as specified by OASIS. It implements the
 format against the published specification; no text or code from the
 specification is reproduced here. The two panel-specific additions —
-`properties.consensusScore` and the `auditPanel/*` notification descriptors — are
+`properties.consensusScore` and the `crosscheck/*` notification descriptors — are
 this project's own, placed in the extension points the format provides for that
 purpose.
 

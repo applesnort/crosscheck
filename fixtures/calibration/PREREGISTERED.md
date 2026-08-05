@@ -64,3 +64,55 @@ too thin to mean anything and the result is reported as inconclusive):
 - **No threshold tuning against these runs.** The similarity threshold and line
   tolerance were fixed by earlier measurement and stay fixed here. If they later
   need re-measuring, that is a separate exercise with its own record.
+
+---
+
+# Outcome — recorded 2026-08-05
+
+Two configurations run, three lenses each, identical prompts and fixture. Both
+runs are reported, as required.
+
+| | capable tier | weaker tier |
+|---|---|---|
+| recall | 100% (7/7) | 100% (7/7) |
+| findings | 8 | 9 |
+| false positives | **0** | **0** |
+| consensus precision | 100% | 100% |
+| solo precision | 100% | 100% |
+| consensus findings | 4 | 2 |
+
+## Verdict: INCONCLUSIVE
+
+The criteria required at least 3 false positives for the comparison to mean
+anything. Both runs produced **zero**, so consensus precision and solo precision
+are both 100% and the comparison is undefined for a third time. The claim is
+neither supported nor refuted. Per the rules above this is recorded as
+inconclusive, not as partial support, and the consensus score stays in the code
+without a validation claim attached to it in the README.
+
+## Why the method failed to test the claim
+
+The premise was that a weaker model tier would make more mistakes, supplying the
+false positives the comparison needs. It did not. The weaker tier was **terser,
+not wronger** — it reported fewer findings per lens, in shorter sentences, and
+every one of them still landed on a real planted defect. Lower capability showed
+up as reduced coverage and cruder severity judgement, not as invention. That is
+worth knowing on its own, and it means model tier is the wrong knob for
+generating false positives.
+
+## What the declared fixture change did
+
+`getSessionForUser` now accepts a caller identity and ignores it. Recall went
+from 71-86% to **100% at both tiers**, and all six lens runs found the
+authorization gap. This confirms the earlier miss was a flaw in the fixture, not
+a gap in the lenses: with no caller identity in scope there was genuinely nothing
+to check against. Declared in advance precisely because it was expected to
+flatter the numbers.
+
+## What would actually test the claim
+
+Not another tier, and not subtler decoys authored by the same person who wrote the
+ground truth — that is the p-hacking route this file exists to block. It needs a
+target where the lenses genuinely err: real production code with independent
+ground truth, or a defect corpus someone else built. Until such a run exists, the
+consensus weighting remains an unvalidated hypothesis, and the README says so.

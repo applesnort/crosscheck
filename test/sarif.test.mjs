@@ -27,7 +27,7 @@ test('emits a well-formed 2.1.0 envelope', () => {
   assert.equal(sarif.version, '2.1.0');
   assert.match(sarif.$schema, /sarif-schema-2\.1\.0\.json$/);
   assert.equal(sarif.runs.length, 1);
-  assert.equal(sarif.runs[0].tool.driver.name, 'audit-panel');
+  assert.equal(sarif.runs[0].tool.driver.name, 'crosscheck');
   assert.equal(sarif.runs[0].results.length, 1);
 });
 
@@ -91,7 +91,7 @@ test('fingerprints land in partialFingerprints for cross-run matching', () => {
   const f = at('lib/a.js', 41, 'blocker', 'bad');
   const [result] = toSarif(merged([{ lens: 'check', findings: [f] }]))
     .runs[0].results;
-  assert.equal(result.partialFingerprints.auditPanelFindingV1, fingerprint(f));
+  assert.equal(result.partialFingerprints.crosscheckFindingV1, fingerprint(f));
 });
 
 test('an incomplete lens fails the invocation and is notified, not hidden', () => {
@@ -102,7 +102,7 @@ test('an incomplete lens fails the invocation and is notified, not hidden', () =
   const invocation = sarif.runs[0].invocations[0];
   assert.equal(invocation.executionSuccessful, false);
   const note = invocation.toolExecutionNotifications
-    .find(n => n.descriptor.id === 'auditPanel/lensIncomplete');
+    .find(n => n.descriptor.id === 'crosscheck/lensIncomplete');
   assert.equal(note.level, 'error');
   assert.equal(note.properties.lens, 'ux');
   assert.match(note.message.text, /did not complete/);
@@ -125,7 +125,7 @@ test('unparsed lens output is notified as a warning', () => {
     { lens: 'ux', findings: [], unparsed: ['Here is my summary:'] }
   ]));
   const note = sarif.runs[0].invocations[0].toolExecutionNotifications
-    .find(n => n.descriptor.id === 'auditPanel/unparsedOutput');
+    .find(n => n.descriptor.id === 'crosscheck/unparsedOutput');
   assert.equal(note.level, 'warning');
   assert.match(note.message.text, /Here is my summary:/);
 });
@@ -137,7 +137,7 @@ test('refuted findings are disclosed as notifications, not omitted silently', ()
     }]
   });
   const note = sarif.runs[0].invocations[0].toolExecutionNotifications
-    .find(n => n.descriptor.id === 'auditPanel/refuted');
+    .find(n => n.descriptor.id === 'crosscheck/refuted');
   assert.match(note.message.text, /lib\/a\.js:9/);
   assert.match(note.message.text, /refuted/);
 });

@@ -1,4 +1,4 @@
-# Audit panel — the foreman pattern
+# Crosscheck — the foreman pattern
 
 The roster-agnostic core of a multi-persona audit command. An ensemble /
 mixture-of-critics: each persona lens is blind to what the others see, so the
@@ -30,7 +30,7 @@ The script fans the chosen roster out with `parallel()` and returns the raw find
 
 ```js
 export const meta = {
-  name: 'audit-panel',
+  name: 'crosscheck',
   description: 'Run the persona roster against a target and return raw findings',
   phases: [{title: 'Audit', detail: 'one agent per persona lens'}]
 }
@@ -90,13 +90,13 @@ anything that gates a release.
   independence from a calibration run rather than guessing it.
 - **Attribute** every finding to the persona(s) that raised it.
 
-This step is deterministic, so it does not need a model. `audit-panel report`
+This step is deterministic, so it does not need a model. `crosscheck report`
 does exactly the above, plus baseline filtering and SARIF output.
 
 ## Step 6 — Report
 
 ```
-# Audit Panel — <target>
+# Crosscheck — <target>
 Roster run: <personas>   Skipped: <persona: reason, ...>
 Did not complete: <persona, ...>   Refuted in verification: <n>
 
@@ -131,10 +131,10 @@ there.
   reported like any other skip.
 - **On an existing codebase, take a baseline first.** The first run returns
   everything already wrong and the report gets closed unread. Record it with
-  `audit-panel baseline`, then later runs report what the change introduced —
+  `crosscheck baseline`, then later runs report what the change introduced —
   with the suppressed count stated, so the baseline cannot quietly grow into a
   way of declaring problems normal.
-- **Calibrate before trusting the ranking.** `audit-panel calibrate` scores a run
+- **Calibrate before trusting the ranking.** `crosscheck calibrate` scores a run
   against planted defects and prints consensus precision beside single-persona
   precision. If those two numbers are equal, consensus ranking is decoration on
   your roster and should be reweighted or dropped. Measure it; don't assume it.

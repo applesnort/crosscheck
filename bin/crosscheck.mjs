@@ -2,7 +2,7 @@
 /*!
  * Copyright (c) 2026 Joel Mangin. MIT License.
  */
-// audit-panel — merge lens output into a report, SARIF, or a calibration score.
+// crosscheck — merge lens output into a report, SARIF, or a calibration score.
 //
 // This CLI does not dispatch lenses; your agent harness does that (see
 // foreman.md). It takes what the lenses returned and does the deterministic
@@ -13,11 +13,11 @@
 //    {"lens": "ux", "output": null}]        <- null means the lens died
 //
 // Usage:
-//   audit-panel report            [--in run.json] [--baseline b.json]
-//   audit-panel sarif             [--in run.json] [--baseline b.json] [--out x.sarif]
-//   audit-panel baseline          [--in run.json] --out baseline.json
-//   audit-panel overlap           [--in run.json] [--out overlap.json]
-//   audit-panel calibrate         [--in run.json] --expected expected.json
+//   crosscheck report            [--in run.json] [--baseline b.json]
+//   crosscheck sarif             [--in run.json] [--baseline b.json] [--out x.sarif]
+//   crosscheck baseline          [--in run.json] --out baseline.json
+//   crosscheck overlap           [--in run.json] [--out overlap.json]
+//   crosscheck calibrate         [--in run.json] --expected expected.json
 //
 // Options: --overlap <file>  independence data from `overlap` (report/sarif)
 //          --lenses <dir>    lens directory for SARIF rule metadata
@@ -35,7 +35,7 @@ import { parseReports } from '../lib/parse.mjs';
 import { toSarifJson } from '../lib/sarif.mjs';
 
 function fail(message) {
-  process.stderr.write(`audit-panel: ${message}\n`);
+  process.stderr.write(`crosscheck: ${message}\n`);
   process.exit(2);
 }
 
@@ -120,7 +120,7 @@ function buildMerged(options) {
 function report({ merged, suppressed, stale }) {
   const counts = countsBySeverity(merged.findings);
   const out = [];
-  out.push('# Audit Panel');
+  out.push('# Crosscheck report');
   if (merged.incomplete.length) {
     out.push('', `**Did not complete: ${merged.incomplete.join(', ')}** — ` +
       'their coverage is missing from this report.');
@@ -161,7 +161,7 @@ function report({ merged, suppressed, stale }) {
 function write(options, text) {
   if (options.out) {
     writeFileSync(options.out, text);
-    process.stderr.write(`audit-panel: wrote ${options.out}\n`);
+    process.stderr.write(`crosscheck: wrote ${options.out}\n`);
   } else {
     process.stdout.write(text);
   }

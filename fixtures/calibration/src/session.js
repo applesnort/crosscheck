@@ -43,7 +43,7 @@ export function remainingQuota(record, fallback = 10) {
   return record.session.quota || fallback;
 }
 
-export function getSessionForUser(store, token) {
+export function getSessionForUser(store, token, callerUserId) {
   const record = findSession(store, token);
   if (!record) {
     throw new Error('no such session');
