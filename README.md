@@ -68,12 +68,23 @@ pins both bands using verbatim lens output, so the thresholds cannot drift
 unnoticed. Re-measure when the roster or the lens prompts change.
 
 **What is and is not established.** The mechanism demonstrably fires on real
-output: three consensus findings in each of two independent runs, with genuinely
-distinct same-line defects correctly kept apart. Whether consensus *predicts
-correctness* is still unproven — across both runs the lenses produced **zero**
-false positives, so consensus and single-lens precision both read 100% and
-consensus had nothing to discriminate. That comparison needs a target the lenses
-actually get wrong.
+output: consensus findings appear in every run, and genuinely distinct same-line
+defects are correctly kept apart. Whether consensus *predicts correctness* is
+**unvalidated after four runs** — every run produced zero false positives, so
+consensus and single-lens precision both read 100% and the comparison is
+undefined rather than favourable.
+
+A weaker model tier was tried specifically to generate the errors the comparison
+needs. It did not work: the weaker lenses were **terser, not wronger**, reporting
+fewer findings that still landed on real defects. Lower capability showed up as
+reduced coverage, not invention.
+
+The criteria were fixed in advance and the outcomes recorded in
+[`fixtures/calibration/PREREGISTERED.md`](fixtures/calibration/PREREGISTERED.md),
+including the runs that failed to test the claim. Testing it properly needs a
+target where the lenses genuinely err — real code with independent ground truth,
+or a defect corpus built by someone other than the person who wrote the lenses.
+Subtler decoys authored by the same hand would be p-hacking, not evidence.
 
 ## SARIF output
 
@@ -133,20 +144,25 @@ where the lenses make no mistakes cannot demonstrate that consensus filters
 mistakes. It exits non-zero when a planted defect was missed, so it works as a CI
 gate on the panel itself.
 
-Measured results from two independent runs against the fixture (7 planted
-defects, 7 decoys, three applicable lenses):
+Measured results across four runs against the fixture (7 planted defects, 7
+decoys, three applicable lenses). The last two differ only in the model tier
+driving the lenses:
 
-| | run 1 | run 2 |
-|---|---|---|
-| recall | 85.7% (6/7) | 71.4% (5/7) |
-| precision | 100% | 100% |
-| false positives | 0 of 9 | 0 of 7 |
-| consensus findings | 3 | 3 |
+| | run 1 | run 2 | capable tier | weaker tier |
+|---|---|---|---|---|
+| recall | 85.7% | 71.4% | **100%** | **100%** |
+| findings | 9 | 7 | 8 | 9 |
+| false positives | 0 | 0 | 0 | 0 |
+| consensus findings | 3 | 3 | 4 | 2 |
 
-Both runs missed the same defect: an authorization gap where a session is
-returned without checking that the caller owns it. The lens that owns that
-category walked past it twice. Severity was under-called far more often than
-over-called. Neither run touched a single decoy.
+Runs 1 and 2 both missed an authorization gap, which turned out to be the
+fixture's fault: the function accepted no caller identity, so there was nothing
+in scope to check against. Correcting that — declared in advance, since it was
+expected to raise recall — took recall to 100% at both tiers, and all six lens
+runs then found it.
+
+Severity is under-called far more often than over-called, in every run. No run
+has ever touched a decoy.
 
 ## What's here
 
