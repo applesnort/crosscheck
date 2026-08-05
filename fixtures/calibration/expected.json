@@ -1,0 +1,110 @@
+{
+  "note": "Ground truth for the calibration fixture. Each entry is a defect planted on purpose, with the lens expected to catch it and the severity a correct panel should assign. `alsoAcceptedBy` lists lenses that may legitimately report the same defect without it counting as a false positive. `line` is the most specific offending statement; `span` is the acceptable anchor range, since a lens may reasonably cite the function signature or the surrounding block instead.",
+  "target": [
+    "fixtures/calibration/src/session.js"
+  ],
+  "defects": [
+    {
+      "id": "predictable-token",
+      "file": "fixtures/calibration/src/session.js",
+      "line": 17,
+      "severity": "BLOCK",
+      "expectedBy": "security-check",
+      "alsoAcceptedBy": [
+        "check"
+      ],
+      "summary": "session token derived from predictable inputs (user id + second-resolution clock)",
+      "span": [
+        15,
+        18
+      ]
+    },
+    {
+      "id": "timing-unsafe-compare",
+      "file": "fixtures/calibration/src/session.js",
+      "line": 24,
+      "severity": "BLOCK",
+      "expectedBy": "security-check",
+      "alsoAcceptedBy": [],
+      "summary": "secret compared with non-constant-time equality",
+      "span": [
+        23,
+        25
+      ]
+    },
+    {
+      "id": "expires-as-number",
+      "file": "fixtures/calibration/src/session.js",
+      "line": 35,
+      "severity": "BLOCK",
+      "expectedBy": "architect",
+      "alsoAcceptedBy": [
+        "check"
+      ],
+      "summary": "expiry stored as a numeric timestamp, defeating any date-based TTL, with the grace period baked into the stored value",
+      "span": [
+        30,
+        38
+      ]
+    },
+    {
+      "id": "unguarded-expiry-read",
+      "file": "fixtures/calibration/src/session.js",
+      "line": 44,
+      "severity": "BLOCK",
+      "expectedBy": "check",
+      "alsoAcceptedBy": [
+        "architect",
+        "security-check"
+      ],
+      "summary": "read returns a record without checking expiry, so an expired session is treated as live",
+      "span": [
+        43,
+        45
+      ]
+    },
+    {
+      "id": "falsy-quota-reset",
+      "file": "fixtures/calibration/src/session.js",
+      "line": 50,
+      "severity": "FIX",
+      "expectedBy": "check",
+      "alsoAcceptedBy": [],
+      "summary": "a quota of 0 is treated as absent and silently resets to the default",
+      "span": [
+        49,
+        51
+      ]
+    },
+    {
+      "id": "missing-ownership-check",
+      "file": "fixtures/calibration/src/session.js",
+      "line": 60,
+      "severity": "BLOCK",
+      "expectedBy": "security-check",
+      "alsoAcceptedBy": [
+        "check"
+      ],
+      "summary": "no ownership check, so any authenticated caller can read another user's session",
+      "span": [
+        55,
+        61
+      ]
+    },
+    {
+      "id": "swallowed-error",
+      "file": "fixtures/calibration/src/session.js",
+      "line": 69,
+      "severity": "BLOCK",
+      "expectedBy": "check",
+      "alsoAcceptedBy": [
+        "architect"
+      ],
+      "summary": "catch discards the failure and returns an empty list, making an outage look like no data",
+      "span": [
+        65,
+        70
+      ]
+    }
+  ]
+}

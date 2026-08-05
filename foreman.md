@@ -58,36 +58,83 @@ Notes that matter:
 - If the code under audit is being edited concurrently, tell each persona to read a **pinned ref** (`git show <sha>:<path>`) so findings are reproducible.
 - Only use `Agent` directly for a **single** follow-up lens, or when a persona needs to be re-run with new information. One or two inline agents is fine; a fleet is not.
 
-## Step 4 — Merge, dedupe, escalate
+## Step 4 — Verify before reporting
 
-- **Dedupe** by `file:line` + normalized issue. When two+ personas flag the same thing, collapse into one entry, list all reporting personas, and mark it **CONSENSUS** — these are your highest-confidence findings, list them first within their severity.
-- **Normalize severity** to one scale: **BLOCK** (any persona's top tier — must-fix / blocker / violation / invisible-failure / data-corrupting / critical), **FIX** (middle tier), **CONSIDER** (lowest tier). On conflict, take the highest.
+**Run this by default, not as an opt-in heavier mode.** False positives cost more
+than misses: a panel that cries wolf twice stops being read, and then its true
+findings go unread with the rest.
+
+For every `BLOCK`, dispatch one skeptic whose job is to *refute* it — told to
+default to refuted when the evidence is not there, and given the file to check
+rather than the finding's own summary of it. Drop what gets refuted, and report
+the refuted count. A finding that disappears without a number is
+indistinguishable from one that was never found.
+
+Scale the pass to the stakes: one skeptic per `BLOCK` is the floor, three with
+distinct angles (does it reproduce, is it reachable, is the fix right) for
+anything that gates a release.
+
+## Step 5 — Merge, dedupe, escalate
+
+- **Dedupe** by `file:line` + normalized issue. When two+ personas flag the same
+  thing, collapse into one entry, list all reporting personas, and mark it
+  **CONSENSUS** — list those first within their severity.
+- **Normalize severity** to one scale: **BLOCK** (any persona's top tier —
+  must-fix / blocker / violation / invisible-failure / data-corrupting /
+  critical), **FIX** (middle tier), **CONSIDER** (lowest tier). On conflict, take
+  the highest.
+- **Weight consensus by independence, not by headcount.** Two personas that
+  overlap in remit agreeing is weaker evidence than two that do not. Score a
+  finding as *effective independent confirmations*: 1 for a single persona, and
+  for a set, 1 plus the summed independence of each distinct pair. Measure
+  independence from a calibration run rather than guessing it.
 - **Attribute** every finding to the persona(s) that raised it.
 
-## Step 5 — Report
+This step is deterministic, so it does not need a model. `audit-panel report`
+does exactly the above, plus baseline filtering and SARIF output.
+
+## Step 6 — Report
 
 ```
 # Audit Panel — <target>
 Roster run: <personas>   Skipped: <persona: reason, ...>
+Did not complete: <persona, ...>   Refuted in verification: <n>
 
 ## BLOCK (n)
-- [CONSENSUS: security, oncall] file:line — issue — fix
-- [chaos] file:line — issue — fix
+- [CONSENSUS 2: architect, ux] file:line — issue — fix
+- [security-check] file:line — issue — fix
 
 ## FIX (n)
-- [accessibility] file:line — issue — fix
+- [check] file:line — issue — fix
 
 ## CONSIDER (n)
 - [ux] file:line — note
 
 ## Per-persona verdicts
-- security: <one-line verdict>   accessibility: <...>   ...
+- security-check: <one-line verdict>   check: <...>   ...
 
 ## Panel verdict
-<Ship / Fix blockers first / Do not ship> — <one sentence>. <n> block, <n> fix, <n> consider; <n> consensus findings.
+<Ship / Fix before merge / Do not ship> — <one sentence>. <n> block, <n> fix, <n> consider; <n> consensus.
 ```
 
+Three numbers must always appear, even when they are zero: personas skipped,
+personas that did not complete, and findings refuted. Each one is a hole in the
+coverage, and a report that omits them reads as completeness that was never
+there.
+
 ## Notes
-- Default scale is ~6-9 personas. That is one workflow, not 6-9 inline agents -- see Step 3. The workflow's own concurrency cap handles pacing; don't chunk the roster.
-- `--only a,b,c` / `--skip x,y` override the routing.
-- This is the reusable version. For a heavier run with adversarial verification of each finding (independent skeptics per BLOCK finding), say "verify" and escalate to a Workflow — but the default panel above is one parallel round + synthesis.
+
+- Default scale is ~6-9 personas. That is one workflow, not 6-9 inline agents —
+  see Step 3. The workflow's own concurrency cap handles pacing; don't chunk the
+  roster.
+- `--only a,b,c` / `--skip x,y` override the routing, and the override is
+  reported like any other skip.
+- **On an existing codebase, take a baseline first.** The first run returns
+  everything already wrong and the report gets closed unread. Record it with
+  `audit-panel baseline`, then later runs report what the change introduced —
+  with the suppressed count stated, so the baseline cannot quietly grow into a
+  way of declaring problems normal.
+- **Calibrate before trusting the ranking.** `audit-panel calibrate` scores a run
+  against planted defects and prints consensus precision beside single-persona
+  precision. If those two numbers are equal, consensus ranking is decoration on
+  your roster and should be reweighted or dropped. Measure it; don't assume it.

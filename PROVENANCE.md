@@ -20,11 +20,22 @@ deliberately **not** consulted while writing the versions in this repository, an
 no text from them carries forward. That is the reason these files exist as a fresh
 composition rather than as a cleanup of the originals.
 
-## The foreman
+## The foreman and the library
 
-`foreman.md` describes the dispatch, merge, and reporting method. It originates
-with the author, developed through practical use across 2026. It is not derived
-from a third-party source.
+`foreman.md` describes the dispatch, verification, merge, and reporting method. It
+originates with the author, developed through practical use across 2026. It is not
+derived from a third-party source.
+
+`lib/`, `bin/`, `test/`, and `fixtures/` were written from scratch on 2026-08-05
+and have no third-party origin. They carry no dependencies, so nothing is
+vendored, and no code was adapted from another project.
+
+`lib/sarif.mjs` targets SARIF 2.1.0 as specified by OASIS. It implements the
+format against the published specification; no text or code from the
+specification is reproduced here. The two panel-specific additions —
+`properties.consensusScore` and the `auditPanel/*` notification descriptors — are
+this project's own, placed in the extension points the format provides for that
+purpose.
 
 The general idea of using multiple critic personas to review code is **not**
 original to this project and is not claimed as such. Comparable prior work

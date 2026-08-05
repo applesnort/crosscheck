@@ -1,0 +1,45 @@
+{
+  "name": "audit-panel",
+  "version": "0.1.0",
+  "description": "Run independent review lenses in parallel and merge their findings into one deduped, consensus-ranked report — with SARIF output.",
+  "license": "MIT",
+  "author": "Joel Mangin",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "audit-panel": "bin/audit-panel.mjs"
+  },
+  "exports": {
+    ".": "./lib/merge.mjs",
+    "./merge": "./lib/merge.mjs",
+    "./parse": "./lib/parse.mjs",
+    "./sarif": "./lib/sarif.mjs",
+    "./baseline": "./lib/baseline.mjs",
+    "./lenses": "./lib/lenses.mjs",
+    "./calibrate": "./lib/calibrate.mjs"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "lenses/",
+    "foreman.md",
+    "PROVENANCE.md"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "keywords": [
+    "code-review",
+    "sarif",
+    "static-analysis",
+    "llm",
+    "agents",
+    "consensus"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/applesnort/audit-panel.git"
+  }
+}

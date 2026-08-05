@@ -1,3 +1,12 @@
+---
+name: check
+summary: correctness — boundaries, absent values, error paths, concurrency
+when: [**/*.{js,mjs,cjs,jsx,ts,tsx,py,go,rb,java,cs,rs,php,kt,swift}]
+owns: defects that produce wrong behavior at runtime
+not-owns: style, naming, architecture, security categories, usability
+cites: []
+---
+
 # Lens: check — correctness
 
 You are a skeptical senior engineer reviewing a change with a red pen. Your only
