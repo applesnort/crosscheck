@@ -47,6 +47,34 @@ the same as one lens alone, which is what their agreement is actually worth. Pai
 with no measured overlap are treated as independent, and that assumption is stated
 rather than hidden.
 
+### Matching is fuzzy, because real lens output is
+
+Two lenses never phrase a defect the same way, and they anchor it on different
+lines. In one measured run, three lenses each found the same swallowed error and
+cited it at lines **54, 56, and 57**. An exact-match merge reports that as three
+findings and zero agreement.
+
+So findings cluster on line proximity (±3 lines) **plus** issue similarity — a
+Jaccard index over content words, thresholded at `0.12`. Both defaults come from
+measurement, not intuition. Across two runs, pairs describing the same defect
+scored `0.161 / 0.210 / 0.300 / 0.538`; pairs describing *different* defects that
+happened to share a line scored `0.038 / 0.050` — a timing side channel versus a
+nullish comparison on one expression, an unenforced expiry guard versus a split
+store contract on another. The threshold sits in the gap.
+
+The margin is thinner above than below, so under-merging is the failure mode to
+expect first, and six pairs is a small sample. `test/merge-realdata.test.mjs`
+pins both bands using verbatim lens output, so the thresholds cannot drift
+unnoticed. Re-measure when the roster or the lens prompts change.
+
+**What is and is not established.** The mechanism demonstrably fires on real
+output: three consensus findings in each of two independent runs, with genuinely
+distinct same-line defects correctly kept apart. Whether consensus *predicts
+correctness* is still unproven — across both runs the lenses produced **zero**
+false positives, so consensus and single-lens precision both read 100% and
+consensus had nothing to discriminate. That comparison needs a target the lenses
+actually get wrong.
+
 ## SARIF output
 
 Findings are emitted as [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html),
@@ -95,14 +123,30 @@ beside single-lens precision**:
 ```
 consensus vs solo precision — if these are equal, consensus ranking is
 decoration and should be dropped or reweighted:
-  consensus (1): 100.0%
+  consensus (3): 100.0%
   solo      (6): 100.0%
 ```
 
 That comparison is the whole ranking's justification, and it is measured rather
-than asserted. Note that a run with no false positives cannot demonstrate it —
-equal precisions there mean "not yet shown," not "confirmed." It exits non-zero
-when a planted defect was missed, so it works as a CI gate on the panel itself.
+than asserted. Equal precisions mean "not yet shown," not "confirmed" — a run
+where the lenses make no mistakes cannot demonstrate that consensus filters
+mistakes. It exits non-zero when a planted defect was missed, so it works as a CI
+gate on the panel itself.
+
+Measured results from two independent runs against the fixture (7 planted
+defects, 7 decoys, three applicable lenses):
+
+| | run 1 | run 2 |
+|---|---|---|
+| recall | 85.7% (6/7) | 71.4% (5/7) |
+| precision | 100% | 100% |
+| false positives | 0 of 9 | 0 of 7 |
+| consensus findings | 3 | 3 |
+
+Both runs missed the same defect: an authorization gap where a session is
+returned without checking that the caller owns it. The lens that owns that
+category walked past it twice. Severity was under-called far more often than
+over-called. Neither run touched a single decoy.
 
 ## What's here
 

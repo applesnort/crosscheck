@@ -70,12 +70,14 @@ test('a consensus finding upgrades when the higher severity arrives second', () 
 });
 
 test('a missing fix is filled in from whichever lens supplied one', () => {
+  const issue = 'quota of zero treated as absent and replaced with the default';
   const { findings } = mergeFindings([
     { lens: 'check', findings: [
-      { file: 'lib/a.js', line: 3, severity: 'FIX', issue: 'same', fix: null }
+      { file: 'lib/a.js', line: 3, severity: 'FIX', issue, fix: null }
     ] },
-    { lens: 'ux', findings: [at('lib/a.js', 3, 'FIX', 'same', 'do this')] }
+    { lens: 'ux', findings: [at('lib/a.js', 3, 'FIX', issue, 'do this')] }
   ]);
+  assert.equal(findings.length, 1, 'the two reports describe one defect');
   assert.equal(findings[0].fix, 'do this');
 });
 
