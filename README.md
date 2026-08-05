@@ -67,24 +67,36 @@ expect first, and six pairs is a small sample. `test/merge-realdata.test.mjs`
 pins both bands using verbatim lens output, so the thresholds cannot drift
 unnoticed. Re-measure when the roster or the lens prompts change.
 
-**What is and is not established.** The mechanism demonstrably fires on real
-output: consensus findings appear in every run, and genuinely distinct same-line
-defects are correctly kept apart. Whether consensus *predicts correctness* is
-**unvalidated after four runs** — every run produced zero false positives, so
-consensus and single-lens precision both read 100% and the comparison is
-undefined rather than favourable.
+**What is and is not established.** The mechanism fires on real output, and
+distinct same-line defects are correctly kept apart. Whether consensus *predicts
+correctness* is **unvalidated after five rounds**, including one against an
+external corpus of 66 [OWASP Benchmark](https://owasp.org/www-project-benchmark/)
+cases — 33 of them safe code written by someone else to bait tools.
 
-A weaker model tier was tried specifically to generate the errors the comparison
-needs. It did not work: the weaker lenses were **terser, not wronger**, reporting
-fewer findings that still landed on real defects. Lower capability showed up as
-reduced coverage, not invention.
+Every round has failed to test the claim the same way: the lenses are almost
+always right, so there is nearly nothing for consensus to discriminate. On the
+corpus run, recall and specificity were both 97% and there was exactly **one**
+false positive — below the pre-registered threshold of three.
 
-The criteria were fixed in advance and the outcomes recorded in
+That one false positive is the most useful thing measured so far, and it cuts
+against the mechanism. **Both** lenses flagged a safe case: it builds
+`"{call " + param + "}"` and executes it, but `param` comes from a helper named
+`SeparateClassRequest` whose `getTheValue` returns the constant `"bar"` and
+ignores its argument. Neither lens opened the helper; both inferred taint from the
+name.
+
+So independence of *method* does not give independence of *failure*. The two
+lenses reason differently and measure only ~45% redundant, yet they failed
+identically, because both had to resolve the same opaque helper. **Consensus
+cannot filter an error whose cause is shared** — a real limit on agreement
+weighting, and one invisible in any evaluation where the lenses do not err.
+
+Worth noting too: `lenses/taint.md` warns against that exact mistake twice, and
+committed it anyway. A caveat in a prompt is not enforcement.
+
+Criteria were fixed before each round and every outcome is recorded in
 [`fixtures/calibration/PREREGISTERED.md`](fixtures/calibration/PREREGISTERED.md),
-including the runs that failed to test the claim. Testing it properly needs a
-target where the lenses genuinely err — real code with independent ground truth,
-or a defect corpus built by someone other than the person who wrote the lenses.
-Subtler decoys authored by the same hand would be p-hacking, not evidence.
+including the rounds that failed to test anything.
 
 ## SARIF output
 
@@ -144,25 +156,28 @@ where the lenses make no mistakes cannot demonstrate that consensus filters
 mistakes. It exits non-zero when a planted defect was missed, so it works as a CI
 gate on the panel itself.
 
-Measured results across four runs against the fixture (7 planted defects, 7
-decoys, three applicable lenses). The last two differ only in the model tier
-driving the lenses:
+Measured results. Rounds 1-4 use the built-in fixture (7 planted defects, 7
+decoys); round 5 uses 66 OWASP Benchmark cases (33 vulnerable, 33 safe):
 
-| | run 1 | run 2 | capable tier | weaker tier |
-|---|---|---|---|---|
-| recall | 85.7% | 71.4% | **100%** | **100%** |
-| findings | 9 | 7 | 8 | 9 |
-| false positives | 0 | 0 | 0 | 0 |
-| consensus findings | 3 | 3 | 4 | 2 |
+| | fixture x4 | OWASP Benchmark |
+|---|---|---|
+| recall | 71-100% | **97%** (32/33) |
+| specificity | n/a (no safe cases) | **97%** (32/33) |
+| false positives | 0, every run | **1** |
+| consensus precision | undefined (no errors) | 93.3% (15) |
+| solo precision | undefined (no errors) | 100.0% (18) |
+| verdict | inconclusive | inconclusive |
 
-Runs 1 and 2 both missed an authorization gap, which turned out to be the
-fixture's fault: the function accepted no caller identity, so there was nothing
-in scope to check against. Correcting that — declared in advance, since it was
-expected to raise recall — took recall to 100% at both tiers, and all six lens
-runs then found it.
+Both precisions being equal or undefined means "not shown", never "confirmed".
+The corpus run's single false positive was a *consensus* one, which is
+directionally against the claim — but one error cannot separate an effect from
+noise, and the pre-registered criteria forbid reading a refutation into it. Read
+`PREREGISTERED.md` for why that restraint matters more than the result.
 
-Severity is under-called far more often than over-called, in every run. No run
-has ever touched a decoy.
+Two caveats on the 97% figures: OWASP Benchmark is public and predates the
+models, so memorisation is likely, and the lens prompts told the agents that
+about half the files were safe. Neither figure is evidence the lenses are good.
+Severity is under-called far more often than over-called, in every round.
 
 ## What's here
 
