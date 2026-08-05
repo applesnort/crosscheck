@@ -23,6 +23,44 @@ const byId = id => EXPECTED.defects.find(d => d.id === id);
 const at = (line, severity, issue) => ({ file: FILE, line, severity, issue });
 const merge = reports => mergeFindings(reports).findings;
 
+test('the fixture does not leak its own answers', () => {
+  // A fixture that marks where its defects are measures whether a lens can read
+  // comments, not whether it can find defects. The file may say that it contains
+  // planted defects; it may not say which lines they are on.
+  const source = readFileSync(
+    new URL('../fixtures/calibration/src/session.js', import.meta.url), 'utf8');
+  const lines = source.split('\n');
+
+  for (const d of EXPECTED.defects) {
+    assert.doesNotMatch(source, new RegExp(d.id),
+      `defect id ${d.id} must not appear in the fixture source`);
+    const [lo, hi] = d.span;
+    // Look a couple of lines above the span too: a marker comment usually sits
+    // immediately before the code it describes.
+    const window = lines.slice(Math.max(0, lo - 3), hi).join('\n');
+    assert.doesNotMatch(window, /\b(PLANTED|DEFECT|BUG|VULN|FIXME|XXX|INTENTIONAL)\b/i,
+      `${d.id}: a marker comment near lines ${lo}-${hi} gives the answer away`);
+  }
+
+  // The decoys may explain why they are correct — that is the reasoning a lens
+  // has to weigh, not a location tag — but they must not name a severity scale.
+  assert.doesNotMatch(source, /\b(BLOCK|CONSIDER)\b/,
+    'the fixture must not carry the panel severity vocabulary');
+});
+
+test('decoys sit below the declared clean line, so precision is measurable', () => {
+  assert.ok(EXPECTED.decoys.items.length >= 5, 'enough decoys to catch overreach');
+  for (const decoy of EXPECTED.decoys.items) {
+    assert.ok(decoy.line >= EXPECTED.decoys.cleanFrom,
+      `decoy at ${decoy.line} must be at or below line ${EXPECTED.decoys.cleanFrom}`);
+    assert.ok(decoy.why, 'each decoy explains why it is correct');
+  }
+  for (const d of EXPECTED.defects) {
+    assert.ok(d.span[1] < EXPECTED.decoys.cleanFrom,
+      `defect ${d.id} must not overlap the clean region`);
+  }
+});
+
 test('the fixture ground truth is internally consistent', () => {
   assert.ok(EXPECTED.defects.length >= 5, 'enough defects to measure anything');
   for (const d of EXPECTED.defects) {

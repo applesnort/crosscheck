@@ -7,7 +7,7 @@
     {
       "id": "predictable-token",
       "file": "fixtures/calibration/src/session.js",
-      "line": 17,
+      "line": 19,
       "severity": "BLOCK",
       "expectedBy": "security-check",
       "alsoAcceptedBy": [
@@ -15,8 +15,8 @@
       ],
       "summary": "session token derived from predictable inputs (user id + second-resolution clock)",
       "span": [
-        15,
-        18
+        17,
+        20
       ]
     },
     {
@@ -35,7 +35,7 @@
     {
       "id": "expires-as-number",
       "file": "fixtures/calibration/src/session.js",
-      "line": 35,
+      "line": 32,
       "severity": "BLOCK",
       "expectedBy": "architect",
       "alsoAcceptedBy": [
@@ -43,14 +43,14 @@
       ],
       "summary": "expiry stored as a numeric timestamp, defeating any date-based TTL, with the grace period baked into the stored value",
       "span": [
-        30,
-        38
+        27,
+        36
       ]
     },
     {
       "id": "unguarded-expiry-read",
       "file": "fixtures/calibration/src/session.js",
-      "line": 44,
+      "line": 39,
       "severity": "BLOCK",
       "expectedBy": "check",
       "alsoAcceptedBy": [
@@ -59,27 +59,27 @@
       ],
       "summary": "read returns a record without checking expiry, so an expired session is treated as live",
       "span": [
-        43,
-        45
+        38,
+        40
       ]
     },
     {
       "id": "falsy-quota-reset",
       "file": "fixtures/calibration/src/session.js",
-      "line": 50,
+      "line": 43,
       "severity": "FIX",
       "expectedBy": "check",
       "alsoAcceptedBy": [],
       "summary": "a quota of 0 is treated as absent and silently resets to the default",
       "span": [
-        49,
-        51
+        42,
+        44
       ]
     },
     {
       "id": "missing-ownership-check",
       "file": "fixtures/calibration/src/session.js",
-      "line": 60,
+      "line": 51,
       "severity": "BLOCK",
       "expectedBy": "security-check",
       "alsoAcceptedBy": [
@@ -87,14 +87,14 @@
       ],
       "summary": "no ownership check, so any authenticated caller can read another user's session",
       "span": [
-        55,
-        61
+        46,
+        52
       ]
     },
     {
       "id": "swallowed-error",
       "file": "fixtures/calibration/src/session.js",
-      "line": 69,
+      "line": 58,
       "severity": "BLOCK",
       "expectedBy": "check",
       "alsoAcceptedBy": [
@@ -102,9 +102,43 @@
       ],
       "summary": "catch discards the failure and returns an empty list, making an outage look like no data",
       "span": [
-        65,
-        70
+        54,
+        59
       ]
     }
-  ]
+  ],
+  "decoys": {
+    "note": "Correct code included on purpose, to make precision measurable. A finding anchored on any of these is a false positive. Everything from line 61 onward is deliberately correct.",
+    "cleanFrom": 61,
+    "items": [
+      {
+        "line": 68,
+        "why": "Math.random() for retry jitter is not a security decision"
+      },
+      {
+        "line": 72,
+        "why": "randomBytes is the correct source for an opaque id"
+      },
+      {
+        "line": 78,
+        "why": "timingSafeEqual with the required length pre-check"
+      },
+      {
+        "line": 91,
+        "why": "`== null` is the one correct loose comparison here"
+      },
+      {
+        "line": 98,
+        "why": "the error is logged AND rethrown, not swallowed"
+      },
+      {
+        "line": 109,
+        "why": "interpolation into a log line, not into a query"
+      },
+      {
+        "line": 118,
+        "why": "`|| default` where 0 cannot legitimately arrive"
+      }
+    ]
+  }
 }
