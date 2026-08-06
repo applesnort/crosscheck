@@ -313,3 +313,71 @@ disagreement, or a corpus built to defeat exactly the shortcut seen here — an
 opaque helper whose behaviour contradicts its name. That last idea comes from
 this run's single false positive, and building a fixture around it would be
 legitimate only with new criteria fixed in advance.
+
+---
+
+# Round 3 — deception corpus. Criteria fixed 2026-08-05, before the corpus exists.
+
+## The question changed, and this states why before any data is collected
+
+Five rounds have failed to test "consensus predicts correctness" because the
+lenses almost never erred. Round 2's single false positive showed why that
+framing is the wrong one: two lenses with genuinely different methods
+(~45% measured overlap) failed **identically** on `BenchmarkTest00052`, because
+both had to resolve one opaque helper and both guessed from its name.
+
+Consensus can only filter errors that are *uncorrelated between lenses*. So
+whether it helps is not a property of consensus — it is a property of the error
+structure of a given roster on a given codebase. A corpus of traps therefore
+cannot answer "does consensus work", because whoever picks the ratio of shared to
+method-specific traps picks the answer.
+
+The testable question is: **does consensus filter method-specific errors while
+failing on shared ones, in the direction and rough magnitude predicted?** If yes,
+the tool's job is to measure that ratio for your roster, and consensus weighting
+is worth having exactly when your failures are uncorrelated. If no — if consensus
+fails to filter even method-specific errors — the weighting is worthless and
+comes out.
+
+## Corpus design — the mix is declared here and not changed afterward
+
+20 cases, one defect-or-not per file, written for this experiment. Lenses
+(`security-check`, `taint`) are **frozen**: not edited before, during, or after.
+
+| class | n | what it is | correct answer |
+|---|---|---|---|
+| `vulnerable` | 5 | plainly exploitable, no tricks | flag it |
+| `clean` | 5 | plainly safe, no tricks | say nothing |
+| `trap-category` | 3 | matches a known-bad *idiom*, but the value is provably constant or the use is non-security | say nothing |
+| `trap-flow` | 3 | value genuinely untrusted, but the sink is inert or a real sanitiser intervenes | say nothing |
+| `trap-shared` | 4 | a helper whose behaviour contradicts its name — two safe, two genuinely exploitable | 2 say nothing, 2 flag it |
+
+`trap-category` should fool a taxonomy walk and not a flow trace.
+`trap-flow` should fool a flow trace and not a taxonomy walk.
+`trap-shared` should fool both, in both directions: two produce shared false
+positives, two produce shared *misses*. Including shared misses matters — a
+corpus containing only false-positive bait would engineer consensus to look bad.
+
+## Predictions, recorded before running
+
+1. Consensus precision **exceeds** solo precision, because `trap-category` and
+   `trap-flow` errors should be solo by construction while only `trap-shared`
+   produces agreement on a wrong answer.
+2. At least 3 false positives total, satisfying the threshold that rounds 1-2 never
+   reached.
+3. Both `trap-shared` false-positive cases are flagged by **both** lenses.
+4. Measured lens overlap stays well below 1.0, confirming the two remain
+   distinguishable.
+
+If prediction 1 fails while 2 holds, the claim is **refuted** and consensus
+weighting is removed from the README headline. If 2 fails again, the corpus was
+too easy and that is reported as another inconclusive round — not retried with
+harder traps under the same criteria.
+
+## What this round cannot show
+
+It cannot establish that consensus helps on *real* code, because the trap mix is
+chosen. It can establish the mechanism by which consensus helps or fails, and
+whether the tool's own overlap measurement predicts which case you are in. That
+is the claim the README will be allowed to make if the predictions hold — no
+broader one.
