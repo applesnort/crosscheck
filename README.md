@@ -5,12 +5,21 @@ findings into one deduped report, and emit it as **SARIF** — so LLM review fin
 land in the same places static-analysis findings already do.
 
 ```bash
-# your harness dispatches the lenses and collects their text; this does the rest
-crosscheck report --in run.json
-crosscheck sarif  --in run.json --lenses lenses --out panel.sarif
+# run a panel: crosscheck builds the prompts and merges the results,
+# your --exec command supplies the model
+npx crosscheck run lib/ --exec 'claude -p' --sarif panel.sarif
+
+# or merge output a panel already produced
+npx crosscheck report --in run.json
 ```
 
-No dependencies, no install step, 128 tests.
+**crosscheck never talks to a model itself.** `--exec` names any command that takes
+one lens prompt on stdin and returns findings on stdout — `claude -p`, `llm -m ...`,
+or your own wrapper. crosscheck owns prompt construction, routing, fan-out, dedupe,
+and output; you own the model. `--dry-run` prints the roster and prompts without
+spawning anything.
+
+No dependencies, no install step, 153 tests.
 
 ## SARIF output
 
@@ -149,7 +158,10 @@ lib/
   lenses.mjs            frontmatter, glob routing, roster validation
   calibrate.mjs         score a run against planted defects
   corpus.mjs            external corpora, case-level scoring
-bin/crosscheck.mjs      CLI: report | sarif | baseline | overlap | calibrate
+lib/
+  prompt.mjs            lens prompt construction
+  run.mjs               roster planning and bounded fan-out
+bin/crosscheck.mjs      CLI: run | report | sarif | baseline | overlap | calibrate
 fixtures/calibration/   planted defects, ground truth, and the calibration record
 fixtures/deception/     20 modules that look safe and are not, or the reverse
 PROVENANCE.md           where all of this came from
@@ -182,12 +194,17 @@ framework. Any harness that can run N prompts concurrently and collect their tex
 can drive this; feed the results in as `[{"lens": "check", "output": "..."}]`, with
 `null` for a lens that died.
 
-One property worth preserving whatever you build on: **dispatch out of band.** A
-parallel fan-out that renders inline floods the session you are working in and has
-to be killed to recover it.
+`crosscheck run` does this for you, bounded by `--concurrency`, and writes the raw
+lens text with `--out` so a run can be rescored later without paying the model
+again. Routing comes from each lens's `when` globs; `--only` and `--skip` override
+it, and every skip is reported with its reason.
+
+One property worth preserving if you build your own dispatcher: **dispatch out of
+band.** A parallel fan-out that renders inline floods the session you are working
+in and has to be killed to recover it.
 
 ```bash
-npm test   # 128 tests, no dependencies
+npm test   # 153 tests, no dependencies
 ```
 
 ## Adding a lens

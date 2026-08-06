@@ -191,3 +191,41 @@ test('every shipped lens states the output contract and NO FINDINGS', () => {
     assert.match(text, /BLOCK/, `${file} documents the severity scale`);
   }
 });
+
+test('a braced glob in frontmatter stays one pattern', () => {
+  // Splitting `**/*.{js,mjs}` on commas yields three broken globs, and the lens
+  // then matches nothing. This shipped broken until an end-to-end run caught it.
+  const meta = parseFrontmatter([
+    '---',
+    'name: check',
+    'summary: s',
+    'when: [**/*.{js,mjs,cjs}, **/migrations/**]',
+    'owns: o',
+    'not-owns: n',
+    '---'
+  ].join('\n'));
+  assert.deepEqual(meta.when, ['**/*.{js,mjs,cjs}', '**/migrations/**']);
+  assert.equal(matchesAny('lib/a.js', meta.when), true);
+  assert.equal(matchesAny('lib/a.mjs', meta.when), true);
+  assert.equal(matchesAny('db/migrations/001.sql', meta.when), true);
+  assert.equal(matchesAny('lib/a.ts', meta.when), false);
+});
+
+test('quoted list entries containing commas survive', () => {
+  const meta = parseFrontmatter([
+    '---', 'name: x', 'summary: s', 'when: ["a,b.js", **/*.js]',
+    'owns: o', 'not-owns: n', '---'
+  ].join('\n'));
+  assert.deepEqual(meta.when, ['a,b.js', '**/*.js']);
+});
+
+test('every shipped lens routes to an ordinary source file', () => {
+  // The end-to-end check the unit tests missed: real frontmatter, real globs.
+  const files = readdirSync(LENS_DIR).filter(f => f.endsWith('.md'));
+  const routable = files.filter(file => {
+    const meta = parseFrontmatter(readFileSync(join(LENS_DIR, file), 'utf8'));
+    return matchesAny('lib/example.js', meta.when);
+  });
+  assert.ok(routable.length >= 3,
+    `only ${routable.length} lens(es) match a plain .js file — check the globs`);
+});
