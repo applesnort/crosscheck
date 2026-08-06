@@ -293,6 +293,33 @@ contract, since that is what the parser expects back.
 `crosscheck lenses` prints the resolved set with each lens's origin and globs,
 which is the fastest way to see why something did or did not run.
 
+### Local lenses stay local
+
+Nothing in `./lenses` or `./.crosscheck/lenses` is packaged, uploaded, or shared
+by crosscheck. Those files are read off your disk at dispatch time and go nowhere
+else. That has two practical consequences worth knowing before you write any.
+
+**A local lens can be as specific as you like.** The packaged lenses are
+deliberately generic, which also makes them shallow: they cannot know your
+storage conventions, your framework's failure modes, the mistake your team makes
+every quarter, or the review standard one colleague applies better than anyone
+else. A lens that encodes any of that will outperform a generic one on your
+codebase, and it belongs in your repo rather than upstream. The useful ones
+usually aren't portable.
+
+**Distribution is where obligations start, and you are not distributing.** If you
+adapt a lens from a published persona set, a standards document, or a colleague's
+review checklist, keeping it local puts you in the same position as any private
+note-taking. Those materials often carry licences requiring attribution — the UK
+government's accessibility personas are published under the Open Government
+Licence, for one — and that condition attaches when you *publish* a derivative,
+not when you run one. If a local lens later becomes something you want to share,
+that is the moment to check what it derives from and credit it.
+
+The corollary: a lens holding a named individual's review preferences, or a
+description of an unreleased product, is a local lens permanently. Publishing it
+shares something about a person or a project, not just a prompt.
+
 ## Writing a good lens
 
 A lens earns its place by finding what the others miss. Give it a remit narrow
