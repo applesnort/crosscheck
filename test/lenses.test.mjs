@@ -229,3 +229,60 @@ test('every shipped lens routes to an ordinary source file', () => {
   assert.ok(routable.length >= 3,
     `only ${routable.length} lens(es) match a plain .js file — check the globs`);
 });
+
+// --- layered lens sources ---
+
+import { resolveLensSet } from '../lib/lenses.mjs';
+
+const lens = (name, extra = {}) =>
+  ({ name, when: ['**/*.js'], owns: 'o', 'not-owns': 'n', ...extra });
+
+test('later sources add to earlier ones rather than replacing them', () => {
+  const { lenses } = resolveLensSet([
+    { origin: 'builtin', lenses: [lens('check'), lens('ux')] },
+    { origin: 'mine', lenses: [lens('chaos')] }
+  ]);
+  assert.deepEqual(lenses.map(l => l.name), ['chaos', 'check', 'ux'],
+    'adding one lens must not cost you the other five');
+});
+
+test('a same-named lens in a later source shadows the earlier one', () => {
+  const { lenses, shadowed } = resolveLensSet([
+    { origin: 'builtin', lenses: [lens('check', { owns: 'stock' })] },
+    { origin: 'mine', lenses: [lens('check', { owns: 'customised' })] }
+  ]);
+  assert.equal(lenses.length, 1);
+  assert.equal(lenses[0].owns, 'customised');
+  assert.equal(lenses[0].origin, 'mine');
+  assert.deepEqual(shadowed,
+    [{ name: 'check', winner: 'mine', shadowedFrom: 'builtin' }],
+    'an override must be reported, not silent');
+});
+
+test('each resolved lens records where it came from', () => {
+  const { lenses } = resolveLensSet([
+    { origin: '/pkg/lenses', lenses: [lens('check')] },
+    { origin: './lenses', lenses: [lens('chaos')] }
+  ]);
+  assert.equal(lenses.find(l => l.name === 'check').origin, '/pkg/lenses');
+  assert.equal(lenses.find(l => l.name === 'chaos').origin, './lenses');
+});
+
+test('nothing shadowed means an empty report, not undefined', () => {
+  const { shadowed } = resolveLensSet([
+    { origin: 'a', lenses: [lens('check')] }
+  ]);
+  assert.deepEqual(shadowed, []);
+});
+
+test('a nameless lens is skipped rather than crashing the set', () => {
+  const { lenses } = resolveLensSet([
+    { origin: 'a', lenses: [lens('check'), { when: ['**/*.js'] }] }
+  ]);
+  assert.deepEqual(lenses.map(l => l.name), ['check']);
+});
+
+test('no sources resolves to an empty set', () => {
+  assert.deepEqual(resolveLensSet([]).lenses, []);
+  assert.deepEqual(resolveLensSet(undefined).lenses, []);
+});

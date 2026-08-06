@@ -200,7 +200,8 @@ lib/
   prompt.mjs            lens prompt construction
   run.mjs               roster planning and bounded fan-out
   config.mjs            .crosscheckrc.json discovery and validation
-bin/crosscheck.mjs      CLI: run | report | sarif | baseline | overlap | calibrate
+bin/crosscheck.mjs      CLI: run | lenses | report | sarif | baseline |
+                             overlap | calibrate
 fixtures/calibration/   planted defects, ground truth, and the calibration record
 fixtures/deception/     20 modules that look safe and are not, or the reverse
 PROVENANCE.md           where all of this came from
@@ -246,7 +247,53 @@ in and has to be killed to recover it.
 npm test   # 183 tests, no dependencies
 ```
 
-## Adding a lens
+## Adding your own lenses
+
+Lens sources layer, in increasing precedence:
+
+1. the lenses packaged with crosscheck
+2. `./lenses` or `./.crosscheck/lenses` in your project, if present
+3. anything named by `--lenses dir,dir` or the config's `lenses` key
+
+A later source **adds** to the earlier ones. A lens whose `name` matches an
+earlier one **overrides** it, and the override is printed — so customising the
+stock `check` costs one file rather than forking all five and losing upstream
+changes. `--no-builtin` drops the packaged set entirely.
+
+```bash
+mkdir -p .crosscheck/lenses
+$EDITOR .crosscheck/lenses/chaos.md
+npx @applesnort/crosscheck lenses     # what resolved, and from where
+```
+
+A lens is a markdown file: five frontmatter keys, then the prompt.
+
+```markdown
+---
+name: chaos
+summary: adversarial user trying to break the flow
+when: [**/*.{js,jsx,tsx,vue}]
+owns: states reachable by misuse — double-submit, back button, hostile input
+not-owns: correctness, security categories, architecture
+---
+
+# Lens: chaos
+
+You are trying to break this, not review it. ...
+
+Findings only: `file:line — SEVERITY — issue — fix`. SEVERITY is BLOCK, FIX, or
+CONSIDER. If nothing here can be broken, reply exactly `NO FINDINGS`.
+```
+
+`when` routes it — a lens whose globs match nothing in the target is skipped, with
+the reason printed. `not-owns` is required: a lens that never declines dilutes the
+signal everything else depends on. The body should end by restating the output
+contract, since that is what the parser expects back.
+
+`crosscheck lenses` prints the resolved set with each lens's origin and globs,
+which is the fastest way to see why something did or did not run.
+
+## Writing a good lens
 
 A lens earns its place by finding what the others miss. Give it a remit narrow
 enough that it declines most changes, state what it does *not* own, and make it name

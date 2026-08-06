@@ -20,6 +20,7 @@
 //   crosscheck run <path...>     --exec '<command>'  [--lenses dir] [--only a,b]
 //                                [--skip x,y] [--concurrency N] [--out run.json]
 //                                [--sarif f] [--baseline b] [--mixed] [--dry-run]
+//   crosscheck lenses            [--lenses dir,dir] [--no-builtin]
 //   crosscheck report            [--in run.json] [--baseline b.json]
 //   crosscheck sarif             [--in run.json] [--baseline b.json] [--out x.sarif]
 //   crosscheck baseline          [--in run.json] --out baseline.json
@@ -50,7 +51,7 @@ import {
 import { join, relative, resolve } from 'node:path';
 import { formatScore, score } from '../lib/calibrate.mjs';
 import { findConfig, mergeConfig, validateConfig } from '../lib/config.mjs';
-import { parseFrontmatter } from '../lib/lenses.mjs';
+import { parseFrontmatter, resolveLensSet } from '../lib/lenses.mjs';
 import {
   countsBySeverity, lensOverlap, mergeFindings, panelVerdict
 } from '../lib/merge.mjs';
@@ -65,7 +66,7 @@ function fail(message) {
   process.exit(2);
 }
 
-const BOOLEAN_FLAGS = new Set(['dry-run', 'mixed']);
+const BOOLEAN_FLAGS = new Set(['dry-run', 'mixed', 'no-builtin']);
 
 function parseArgs(argv) {
   const [command, ...rest] = argv;
@@ -132,18 +133,37 @@ function loadLensMeta(dir) {
   return meta;
 }
 
-// Lens directory: an explicit --lenses, else ./lenses, else the copy shipped
-// with the package. Resolved loudly so a typo does not silently run zero lenses.
-function resolveLensDir(dir) {
-  const candidates = dir
-    ? [resolve(dir)]
-    : [resolve('lenses'), new URL('../lenses/', import.meta.url).pathname];
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) {
-      return candidate;
+const BUILTIN_LENS_DIR = new URL('../lenses/', import.meta.url).pathname;
+
+// Lens sources, in increasing precedence: the packaged lenses, then ./lenses or
+// .crosscheck/lenses if present, then anything named by --lenses. Layering
+// rather than replacing means adding one lens costs one file instead of forking
+// all of them and losing upstream changes.
+function lensSources(option, { includeBuiltin = true } = {}) {
+  const dirs = [];
+  if (includeBuiltin) {
+    dirs.push(BUILTIN_LENS_DIR);
+  }
+  for (const local of ['lenses', '.crosscheck/lenses']) {
+    const path = resolve(local);
+    if (existsSync(path) && path !== resolve(BUILTIN_LENS_DIR)) {
+      dirs.push(path);
     }
   }
-  fail(`no lens directory found (looked in ${candidates.join(', ')})`);
+  const explicit = Array.isArray(option)
+    ? option
+    : (option ? String(option).split(',').map(d => d.trim()).filter(Boolean) : []);
+  for (const dir of explicit) {
+    const path = resolve(dir);
+    if (!existsSync(path)) {
+      fail(`no such lens directory: ${dir}`);
+    }
+    dirs.push(path);
+  }
+  if (dirs.length === 0) {
+    fail('no lens directories to load (--no-builtin with no --lenses?)');
+  }
+  return dirs.map(dir => ({ origin: dir, lenses: loadLenses(dir) }));
 }
 
 function loadLenses(dir) {
@@ -331,14 +351,21 @@ async function runCommand(cliOptions, positional) {
   if (!options.exec && !options['dry-run']) {
     fail("run needs --exec '<command>' (or --dry-run to see the prompts)");
   }
-  const lensDir = resolveLensDir(options.lenses);
-  const lenses = loadLenses(lensDir);
+  const sources = lensSources(options.lenses,
+    { includeBuiltin: !options['no-builtin'] });
+  const { lenses, shadowed } = resolveLensSet(sources);
+  const lensDir = sources.at(-1).origin;
+  for (const s of shadowed) {
+    process.stderr.write(
+      `crosscheck: lens "${s.name}" from ${s.winner} overrides ${s.shadowedFrom}\n`);
+  }
   // mergeConfig has already normalised these to arrays from either source.
   const overrides = { only: options.only, skip: options.skip };
   const { roster, skipped, unmatched } = planRun(lenses, files, overrides);
 
   process.stderr.write(
-    `crosscheck: ${files.length} file(s), lenses from ${lensDir}\n` +
+    `crosscheck: ${files.length} file(s), ${lenses.length} lens(es) from ` +
+    `${sources.length} source(s)\n` +
     `  roster:  ${roster.map(l => l.name).join(', ') || '(none)'}\n` +
     (skipped.length
       ? skipped.map(s => `  skipped: ${s.lens} — ${s.reason}`).join('\n') + '\n'
@@ -403,7 +430,7 @@ async function runCommand(cliOptions, positional) {
 
   if (options.sarif) {
     writeFileSync(options.sarif, toSarifJson(merged, {
-      lensMeta: loadLensMeta(lensDir)
+      lensMeta: Object.fromEntries(lenses.map(l => [l.name, l]))
     }));
     process.stderr.write(`crosscheck: wrote ${options.sarif}\n`);
   }
@@ -427,6 +454,22 @@ async function main() {
 
   if (command === 'run') {
     await runCommand(options, positional);
+    return;
+  }
+
+  if (command === 'lenses') {
+    const sources = lensSources(options.lenses,
+      { includeBuiltin: !options['no-builtin'] });
+    const { lenses, shadowed } = resolveLensSet(sources);
+    const out = [`${lenses.length} lens(es) from ${sources.length} source(s):`];
+    for (const lens of lenses) {
+      out.push(`  ${lens.name.padEnd(16)} ${lens.origin}`);
+      out.push(`    when: ${(lens.when ?? []).join(', ')}`);
+    }
+    for (const s of shadowed) {
+      out.push(`  override: "${s.name}" from ${s.winner} shadows ${s.shadowedFrom}`);
+    }
+    process.stdout.write(out.join('\n') + '\n');
     return;
   }
 
