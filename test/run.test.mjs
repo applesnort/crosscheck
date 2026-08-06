@@ -5,7 +5,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CONTRACT_LINE, buildLensPrompt } from '../lib/prompt.mjs';
+import { CONTRACT_LINE, buildLensPrompt, stripFrontmatter } from '../lib/prompt.mjs';
 import { DEFAULT_CONCURRENCY, planRun, promptsFor, runPanel } from '../lib/run.mjs';
 import { mergeFindings } from '../lib/merge.mjs';
 
@@ -215,4 +215,44 @@ test('skipped lenses are carried through untouched', async () => {
   const { roster, skipped } = planRun(LENSES, ['lib/a.js']);
   const result = await runPanel({ roster, skipped, exec: okExec('NO FINDINGS') });
   assert.deepEqual(result.skipped, skipped);
+});
+
+test('frontmatter is stripped from the inlined definition', () => {
+  const withMeta = '---\nname: check\nwhen: [**/*.js]\ncites: []\n---\n\n' +
+    '# Lens: check\n\nfind the bugs';
+  assert.equal(stripFrontmatter(withMeta), '# Lens: check\n\nfind the bugs');
+  const p = buildLensPrompt(LENSES[0], ['a.js'], { definition: withMeta });
+  assert.match(p, /# Lens: check/);
+  assert.doesNotMatch(p, /when: \[/, 'routing globs must not reach the model');
+  assert.doesNotMatch(p, /cites:/);
+});
+
+test('a definition with no body beyond frontmatter is an error', () => {
+  assert.throws(
+    () => buildLensPrompt(LENSES[0], ['a.js'],
+      { definition: '---\nname: check\n---\n' }),
+    /no body to adopt/);
+});
+
+test('a document without frontmatter passes through unchanged', () => {
+  assert.equal(stripFrontmatter('# Lens\n\nbody'), '# Lens\n\nbody');
+});
+
+test('files matching no lens are reported, not silently dropped', () => {
+  const { roster, unmatched } = planRun(LENSES,
+    ['lib/a.js', 'app/x.jsx', 'src/styles.css', 'README.md']);
+  assert.deepEqual(roster.map(l => l.name).sort(), ['check', 'ux']);
+  assert.deepEqual(unmatched, ['src/styles.css', 'README.md'],
+    'a file no lens will read is a coverage hole and must surface');
+});
+
+test('unmatched accounts for lenses removed by --only', () => {
+  const { unmatched } = planRun(LENSES, ['lib/a.js', 'app/x.jsx'],
+    { only: ['check'] });
+  assert.deepEqual(unmatched, ['app/x.jsx'],
+    'excluding ux leaves its file unreviewed, and that must be said');
+});
+
+test('nothing is unmatched when every file is covered', () => {
+  assert.deepEqual(planRun(LENSES, ['lib/a.js']).unmatched, []);
 });

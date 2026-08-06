@@ -175,7 +175,11 @@ function collectFiles(targets) {
       }
       return;
     }
-    out.push(relative(process.cwd(), path) || path);
+    // Relative when the target is under cwd, absolute when it is not: a
+    // ../../../ chain is harder to read than the full path, and the model has
+    // to resolve whatever we print.
+    const rel = relative(process.cwd(), path);
+    out.push(!rel || rel.startsWith('..') ? path : rel);
   };
   for (const target of targets) {
     if (!existsSync(target)) {
@@ -288,13 +292,18 @@ async function runCommand(options, positional) {
     only: options.only?.split(',').map(s => s.trim()).filter(Boolean),
     skip: options.skip?.split(',').map(s => s.trim()).filter(Boolean)
   };
-  const { roster, skipped } = planRun(lenses, files, overrides);
+  const { roster, skipped, unmatched } = planRun(lenses, files, overrides);
 
   process.stderr.write(
     `crosscheck: ${files.length} file(s), lenses from ${lensDir}\n` +
     `  roster:  ${roster.map(l => l.name).join(', ') || '(none)'}\n` +
     (skipped.length
       ? skipped.map(s => `  skipped: ${s.lens} — ${s.reason}`).join('\n') + '\n'
+      : '') +
+    (unmatched.length
+      ? `  UNREVIEWED: ${unmatched.length} file(s) matched no lens in the ` +
+        `roster — ${unmatched.slice(0, 5).join(', ')}` +
+        (unmatched.length > 5 ? `, +${unmatched.length - 5} more` : '') + '\n'
       : ''));
 
   if (roster.length === 0) {
