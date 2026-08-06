@@ -37,8 +37,24 @@ function stubExec(dir, body) {
   return path;
 }
 
+// Answers as a lens, and as the verifier when handed a refute prompt. The
+// verification pass is on by default, so a stub that only knows how to report
+// findings would see every one of them refuted.
 const FINDING_STUB = `#!/bin/sh
 p=$(cat)
+case "$p" in
+  *"REFUTE it"*) printf 'CONFIRMED — the trigger is reachable\\n'; exit 0 ;;
+esac
+f=$(printf '%s' "$p" | grep -oE '  - [^ ]+' | head -1 | sed 's/  - //')
+printf '%s:1 — BLOCK — a stubbed defect — none needed\\n' "$f"
+`;
+
+// A verifier that refutes everything, to prove findings are actually dropped.
+const REFUTING_STUB = `#!/bin/sh
+p=$(cat)
+case "$p" in
+  *"REFUTE it"*) printf 'REFUTED — the caller validates first\\n'; exit 0 ;;
+esac
 f=$(printf '%s' "$p" | grep -oE '  - [^ ]+' | head -1 | sed 's/  - //')
 printf '%s:1 — BLOCK — a stubbed defect — none needed\\n' "$f"
 `;
@@ -129,6 +145,23 @@ test('a failing exec is surfaced and exits non-zero', () => {
     });
 });
 
+test('verification removes refuted findings and reports the count', () => {
+  const dir = fixture();
+  const stub = stubExec(dir, REFUTING_STUB);
+  const out = run(['run', join(dir, 'src'), '--exec', stub]);
+  assert.match(out, /## BLOCK \(0\)/, 'a refuted BLOCK must not survive');
+  assert.match(out, /Refuted in verification: [1-9]/,
+    'the count is stated, never a silent disappearance');
+});
+
+test('--no-verify keeps findings without a verification pass', () => {
+  const dir = fixture();
+  const stub = stubExec(dir, REFUTING_STUB);
+  const out = run(['run', join(dir, 'src'), '--exec', stub, '--no-verify']);
+  assert.match(out, /## BLOCK \([1-9]/, 'skipping verification keeps the finding');
+  assert.match(out, /Refuted in verification: 0\./);
+});
+
 test('a nonexistent target fails loudly', () => {
   assert.throws(
     () => run(['run', '/definitely/not/here']),
@@ -143,7 +176,7 @@ test('run without --exec explains itself instead of doing nothing', () => {
   assert.throws(
     () => run(['run', join(dir, 'src')]),
     err => {
-      assert.match(String(err.stderr), /--exec/);
+      assert.match(String(err.stderr), /--exec|--diff/);
       return true;
     });
 });

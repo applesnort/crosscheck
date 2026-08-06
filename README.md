@@ -19,7 +19,7 @@ or your own wrapper. crosscheck owns prompt construction, routing, fan-out, dedu
 and output; you own the model. `--dry-run` prints the roster and prompts without
 spawning anything.
 
-No dependencies, no install step, 183 tests.
+No dependencies, no install step, 218 tests.
 
 ## Configuration
 
@@ -50,7 +50,7 @@ and an unrecognised key is an error rather than a silent no-op, because a
 misspelled `exec` that quietly does nothing is worse than a crash.
 
 Accepted keys: `exec`, `lenses`, `concurrency`, `only`, `skip`, `mixed`, `out`,
-`sarif`, `baseline`, `overlap`. Keys beginning `//` are treated as comments.
+`sarif`, `baseline`, `overlap`, `preflight`, `context`, `verify`, `since`. Keys beginning `//` are treated as comments.
 
 > **v0.x — the API is unstable.** The CLI commands and the `lib/` exports may
 > change shape before 1.0. Pin an exact version if you depend on it.
@@ -58,6 +58,62 @@ Accepted keys: `exec`, `lenses`, `concurrency`, `only`, `skip`, `mixed`, `out`,
 > Published as `@applesnort/crosscheck`; npm rejects the unscoped name as too
 > similar to the (abandoned) `cross-check`. Installed, the command is
 > `crosscheck`.
+
+## Reviewing a change, not a directory
+
+Nobody reviews a whole tree — they review a diff. Auditing paths makes cost scale
+with repository size instead of change size, and re-reads code nobody touched.
+
+```bash
+crosscheck run --diff             # everything uncommitted
+crosscheck run --staged           # what you are about to commit
+crosscheck run --since origin/main   # the branch, for a PR
+```
+
+Each lens is told which lines moved:
+
+```
+- src/a.js  (changed lines: 5-27, 61-84)
+```
+
+Ranges are widened by `--context` lines (20 by default) so a lens sees the code
+around a change, and the prompt is explicit that changed lines are the *priority*
+rather than the boundary — a defect elsewhere that the change causes or depends on
+is still worth reporting, while a pre-existing one it never touches is not what the
+review is for. An empty diff exits cleanly rather than falling back to reviewing
+everything.
+
+## Verification is on by default
+
+`BLOCK` findings are refuted before they are reported. Each one gets a skeptic that
+is handed **the file** rather than the finding's account of it, told to default to
+refuted when it cannot name a concrete trigger. Refuted findings are removed and
+**the count is always printed, including zero** — a finding that vanished without a
+number is indistinguishable from one that was never found.
+
+```
+crosscheck: verifying 3 finding(s)
+  ✓ confirmed src/session.js:44
+  ✗ refuted   src/cache.js:12
+Refuted in verification: 1.
+```
+
+False positives cost more than misses: a panel that cries wolf twice stops being
+read, and its true findings go unread with the rest. `--verify` extends the pass to
+every severity; `--no-verify` skips it, at that cost.
+
+A verifier that fails to run is **not** treated as agreement — the finding stands
+and the failure is reported.
+
+## Your own gate, before anything is dispatched
+
+```json
+{ "preflight": "scripts/check-clean-worktree.sh" }
+```
+
+A non-zero exit aborts before a single model call. That lets a project enforce a
+rule crosscheck knows nothing about — data classification, branch policy, a clean
+worktree — without the rule having to exist upstream.
 
 ## SARIF output
 
@@ -200,6 +256,7 @@ lib/
   prompt.mjs            lens prompt construction
   run.mjs               roster planning and bounded fan-out
   config.mjs            .crosscheckrc.json discovery and validation
+  target.mjs            diff parsing, changed line ranges
 bin/crosscheck.mjs      CLI: run | lenses | report | sarif | baseline |
                              overlap | calibrate
 fixtures/calibration/   planted defects, ground truth, and the calibration record

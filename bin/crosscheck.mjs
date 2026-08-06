@@ -17,7 +17,8 @@
 //    {"lens": "ux", "output": null}]        <- null means the lens died
 //
 // Usage:
-//   crosscheck run <path...>     --exec '<command>'  [--lenses dir] [--only a,b]
+//   crosscheck run <path...|--diff|--staged|--since <ref>>
+//                                --exec '<command>'  [--lenses dir] [--only a,b]
 //                                [--skip x,y] [--concurrency N] [--out run.json]
 //                                [--sarif f] [--baseline b] [--mixed] [--dry-run]
 //   crosscheck lenses            [--lenses dir,dir] [--no-builtin]
@@ -44,7 +45,7 @@
 //   crosscheck run lib/ --exec 'my-wrapper --json' --concurrency 2
 // Use --dry-run to print the roster and prompts without spawning anything.
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   existsSync, readFileSync, readdirSync, statSync, writeFileSync
 } from 'node:fs';
@@ -53,20 +54,26 @@ import { formatScore, score } from '../lib/calibrate.mjs';
 import { findConfig, mergeConfig, validateConfig } from '../lib/config.mjs';
 import { parseFrontmatter, resolveLensSet } from '../lib/lenses.mjs';
 import {
-  countsBySeverity, lensOverlap, mergeFindings, panelVerdict
+  applyVerdicts, countsBySeverity, lensOverlap, mergeFindings, panelVerdict
 } from '../lib/merge.mjs';
 import { filterAgainstBaseline, staleBaselineEntries, toBaseline }
   from '../lib/baseline.mjs';
 import { parseReports } from '../lib/parse.mjs';
-import { planRun, promptsFor, runPanel } from '../lib/run.mjs';
+import { planRun, promptsFor, runPanel, verifyFindings } from '../lib/run.mjs';
 import { toSarifJson } from '../lib/sarif.mjs';
+import { diffCommand, targetFromDiff, withContext } from '../lib/target.mjs';
 
 function fail(message) {
   process.stderr.write(`crosscheck: ${message}\n`);
   process.exit(2);
 }
 
-const BOOLEAN_FLAGS = new Set(['dry-run', 'mixed', 'no-builtin']);
+// --diff is boolean rather than taking an optional ref: `run --diff src/` would
+// otherwise be ambiguous about whether src/ is a ref or a path. Use --since <ref>
+// to compare against something.
+const BOOLEAN_FLAGS = new Set([
+  'dry-run', 'mixed', 'no-builtin', 'staged', 'verify', 'no-verify', 'diff'
+]);
 
 function parseArgs(argv) {
   const [command, ...rest] = argv;
@@ -222,6 +229,35 @@ function collectFiles(targets) {
 
 // Spawn the user's command with the prompt on stdin. crosscheck stays agnostic
 // about which model or framework produced the text.
+// Run git and return stdout. A failure here is fatal: a diff-scoped review that
+// silently falls back to reviewing everything would cost far more than intended.
+function git(args) {
+  const result = spawnSync('git', args, { encoding: 'utf8' });
+  if (result.error) {
+    fail(`could not run git: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    fail(`git ${args.join(' ')} failed: ${String(result.stderr).trim()}`);
+  }
+  return result.stdout;
+}
+
+// A preflight command lets a project impose its own gate — data classification,
+// a clean worktree, a branch policy — without crosscheck knowing what the rule
+// is. Non-zero aborts before any model is called.
+function runPreflight(commandLine) {
+  process.stderr.write(`crosscheck: preflight ${commandLine}\n`);
+  const result = spawnSync(commandLine, { shell: true, encoding: 'utf8' });
+  if (result.error) {
+    fail(`preflight could not run: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    process.stderr.write(String(result.stdout ?? ''));
+    process.stderr.write(String(result.stderr ?? ''));
+    fail(`preflight failed (exit ${result.status}); nothing was dispatched`);
+  }
+}
+
 function execCommand(commandLine) {
   return ({ prompt }) => new Promise((resolvePromise, rejectPromise) => {
     const child = spawn(commandLine, {
@@ -255,7 +291,7 @@ function buildMerged(options) {
   };
 }
 
-function report({ merged, suppressed, stale }) {
+function report({ merged, suppressed, stale, refuted = [] }) {
   const counts = countsBySeverity(merged.findings);
   const out = [];
   out.push('# Crosscheck report');
@@ -270,6 +306,9 @@ function report({ merged, suppressed, stale }) {
     out.push('', `Baseline entries no longer reported: ${stale.length} — ` +
       'either fixed, or a lens stopped running.');
   }
+  // Always stated, including zero: a finding that vanished without a count is
+  // indistinguishable from one that was never found.
+  out.push('', `Refuted in verification: ${refuted.length}.`);
   if (merged.unparsed.length) {
     out.push('', `Unparsed lens lines: ${merged.unparsed.length} ` +
       `(${[...new Set(merged.unparsed.map(u => u.lens))].join(', ')}).`);
@@ -342,12 +381,40 @@ async function runCommand(cliOptions, positional) {
   if (configPath) {
     process.stderr.write(`crosscheck: config ${configPath}\n`);
   }
-  if (positional.length === 0) {
-    fail('run needs at least one path to audit');
+  if (options.preflight) {
+    runPreflight(options.preflight);
   }
-  // Resolve the target first: a bad path is the more fundamental error, and
-  // reporting a missing flag instead sends the user after the wrong problem.
-  const files = collectFiles(positional);
+  const diffMode = options.staged || options.since != null ||
+    options.diff != null;
+  if (positional.length === 0 && !diffMode) {
+    fail('run needs a path to audit, or --diff / --staged / --since <ref>');
+  }
+
+  // Resolve the target first: a bad path or an empty diff is the more
+  // fundamental error, and reporting a missing flag instead sends the user after
+  // the wrong problem.
+  let files;
+  let rangesByFile = null;
+  if (diffMode) {
+    const cmd = diffCommand({
+      diff: options.diff, staged: options.staged, since: options.since
+    });
+    process.stderr.write(`crosscheck: git ${cmd.join(' ')}\n`);
+    const target = targetFromDiff(git(cmd));
+    if (target.files.length === 0) {
+      process.stderr.write(
+        'crosscheck: the diff contains no reviewable changes — nothing to do\n');
+      return;
+    }
+    files = target.files;
+    // Widen to give a lens the surrounding code. A defect introduced by a change
+    // is often only visible against the lines the change did not touch.
+    const context = Number(options.context ?? 20);
+    rangesByFile = Object.fromEntries(Object.entries(target.rangesByFile)
+      .map(([file, ranges]) => [file, withContext(ranges, context)]));
+  } else {
+    files = collectFiles(positional);
+  }
   if (!options.exec && !options['dry-run']) {
     fail("run needs --exec '<command>' (or --dry-run to see the prompts)");
   }
@@ -380,7 +447,10 @@ async function runCommand(cliOptions, positional) {
     fail('no lens matched the target; nothing to run');
   }
 
-  const promptOptions = { mixedCorpus: Boolean(options.mixed) };
+  const promptOptions = {
+    mixedCorpus: Boolean(options.mixed),
+    rangesByFile
+  };
 
   if (options['dry-run']) {
     for (const job of promptsFor(roster, promptOptions)) {
@@ -416,6 +486,39 @@ async function runCommand(cliOptions, positional) {
 
   const overlap = loadJson(options.overlap) ?? undefined;
   let merged = mergeFindings(reports, { overlap });
+
+  // Verification is on by default for BLOCK findings: false positives cost more
+  // than misses, because a panel that cries wolf stops being read at all.
+  let refuted = [];
+  const verifyWanted = options['no-verify'] ? false : true;
+  if (verifyWanted) {
+    const candidates = merged.findings.filter(f =>
+      options.verify ? true : f.severity === 'BLOCK');
+    if (candidates.length > 0) {
+      process.stderr.write(
+        `crosscheck: verifying ${candidates.length} finding(s)\n`);
+      const { verdicts, failures: verifyFailures } = await verifyFindings({
+        findings: candidates,
+        exec: execCommand(options.exec),
+        concurrency: Number(options.concurrency ?? 4),
+        onVerdict: (f, v) => process.stderr.write(
+          `  ${v.refuted ? '✗ refuted' : '✓ confirmed'} ${f.file}:${f.line}\n`)
+      });
+      for (const f of verifyFailures) {
+        // A verifier that did not run is not agreement; the finding stands.
+        process.stderr.write(
+          `crosscheck: verifier failed for ${f.finding} — ${f.reason}; ` +
+          'the finding is kept\n');
+      }
+      const applied = applyVerdicts(merged.findings, verdicts);
+      refuted = applied.refuted;
+      merged = { ...merged, findings: applied.findings };
+      if (refuted.length) {
+        process.stderr.write(
+          `crosscheck: ${refuted.length} finding(s) refuted and removed\n`);
+      }
+    }
+  }
   let suppressed = [];
   let stale = [];
   const baseline = loadJson(options.baseline);
@@ -426,11 +529,12 @@ async function runCommand(cliOptions, positional) {
     merged = { ...merged, findings: filtered.findings };
   }
 
-  process.stdout.write(report({ merged, suppressed, stale }));
+  process.stdout.write(report({ merged, suppressed, stale, refuted }));
 
   if (options.sarif) {
     writeFileSync(options.sarif, toSarifJson(merged, {
-      lensMeta: Object.fromEntries(lenses.map(l => [l.name, l]))
+      lensMeta: Object.fromEntries(lenses.map(l => [l.name, l])),
+      refuted
     }));
     process.stderr.write(`crosscheck: wrote ${options.sarif}\n`);
   }

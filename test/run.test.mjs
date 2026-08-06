@@ -5,7 +5,10 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CONTRACT_LINE, buildLensPrompt, stripFrontmatter } from '../lib/prompt.mjs';
+import {
+  CONTRACT_LINE, buildLensPrompt, buildRefutePrompt, parseVerdict,
+  stripFrontmatter
+} from '../lib/prompt.mjs';
 import { DEFAULT_CONCURRENCY, planRun, promptsFor, runPanel } from '../lib/run.mjs';
 import { mergeFindings } from '../lib/merge.mjs';
 
@@ -255,4 +258,69 @@ test('unmatched accounts for lenses removed by --only', () => {
 
 test('nothing is unmatched when every file is covered', () => {
   assert.deepEqual(planRun(LENSES, ['lib/a.js']).unmatched, []);
+});
+
+// --- diff-scoped prompts ---
+
+test('changed line ranges appear beside each file', () => {
+  const p = buildLensPrompt(LENSES[0], ['lib/a.js', 'lib/b.js'], {
+    definition: 'x',
+    rangesByFile: { 'lib/a.js': [[5, 7], [24, 24]] }
+  });
+  assert.match(p, /- lib\/a\.js {2}\(changed lines: 5-7, 24\)/);
+  assert.match(p, /- lib\/b\.js$/m, 'a file with no ranges is listed plainly');
+});
+
+test('a diff review says the change is the priority, not the boundary', () => {
+  const p = buildLensPrompt(LENSES[0], ['lib/a.js'], {
+    definition: 'x', rangesByFile: { 'lib/a.js': [[5, 7]] }
+  });
+  assert.match(p, /review of a change/);
+  assert.match(p, /still worth\s+reporting when the change causes it/,
+    'a defect the change breaks elsewhere must remain reportable');
+});
+
+test('without ranges the prompt says nothing about diffs', () => {
+  const p = buildLensPrompt(LENSES[0], ['lib/a.js'], { definition: 'x' });
+  assert.doesNotMatch(p, /review of a change/);
+  assert.doesNotMatch(p, /changed lines/);
+});
+
+// --- verification pass ---
+
+test('the refute prompt sends the skeptic to the file, not the claim', () => {
+  const p = buildRefutePrompt({
+    file: 'lib/a.js', line: 12, issue: 'quota of 0 treated as absent',
+    fix: 'use ??'
+  });
+  assert.match(p, /REFUTE it/);
+  assert.match(p, /lib\/a\.js:12/);
+  assert.match(p, /Do not take the claim's description of the code as accurate/);
+  assert.match(p, /Default to refuted/);
+  assert.match(p, /REFUTED —/);
+  assert.match(p, /CONFIRMED —/);
+});
+
+test('a refute prompt needs a finding with a file', () => {
+  assert.throws(() => buildRefutePrompt({}), /requires a finding with a file/);
+});
+
+test('verdicts parse in both directions', () => {
+  assert.deepEqual(parseVerdict('CONFIRMED — quota 0 reaches the branch'),
+    { refuted: false, reason: 'quota 0 reaches the branch' });
+  const r = parseVerdict('REFUTED — the caller validates before this runs');
+  assert.equal(r.refuted, true);
+  assert.match(r.reason, /caller validates/);
+});
+
+test('a verdict buried in prose is still found', () => {
+  assert.equal(parseVerdict('Let me check.\nCONFIRMED — real').refuted, false);
+});
+
+test('an unusable verdict counts as refuted, matching the stated default', () => {
+  for (const text of ['', 'I am not sure', undefined, 'maybe?']) {
+    const v = parseVerdict(text);
+    assert.equal(v.refuted, true, JSON.stringify(text));
+  }
+  assert.match(parseVerdict('').reason, /no usable verdict/);
 });

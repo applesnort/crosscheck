@@ -52,8 +52,9 @@ test('comment keys and $schema are allowed through', () => {
 
 test('wrong types are rejected with the key named', () => {
   const cases = [
-    [{ concurrency: 0 }, /concurrency.*positive integer/],
-    [{ concurrency: 'lots' }, /concurrency.*positive integer/],
+    [{ concurrency: 0 }, /concurrency.*integer >= 1/],
+    [{ concurrency: 'lots' }, /concurrency.*integer >= 1/],
+    [{ context: -1 }, /context.*integer >= 0/],
     [{ mixed: 'yes' }, /mixed.*true or false/],
     [{ exec: '' }, /exec.*non-empty string/],
     [{ exec: 42 }, /exec.*non-empty string/],
