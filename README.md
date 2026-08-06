@@ -27,25 +27,48 @@ against usability findings inside one context.
 Agreement then becomes signal. Two lenses that never saw each other's output,
 landing on the same `file:line`, is a stronger claim than either alone.
 
-## Consensus is weighted by independence, not headcount
+## It measures whether your lenses are redundant
+
+This is the part that is demonstrated, so it goes first.
 
 Most implementations stop at "N agents agreed." That over-credits lenses whose
-remits overlap: `check` and `security-check` both look at injection, so their
-agreement says less than `architect` and `ux` converging on the same line.
-
-A finding is scored as **effective independent confirmations** — 1 for a single
-lens, and for a set, 1 plus the summed independence of every distinct pair, where
-independence is `1 − overlap` measured from a real run:
+remits overlap: two lenses that look at the same things agreeing tells you less
+than two that do not. So overlap is **measured** from a real run rather than
+assumed —
 
 ```bash
 crosscheck overlap --in run.json --out overlap.json   # measure it
 crosscheck report  --in run.json --overlap overlap.json
 ```
 
-Two unrelated lenses agreeing scores `2.0`. Two fully redundant ones score `1.0` —
-the same as one lens alone, which is what their agreement is actually worth. Pairs
-with no measured overlap are treated as independent, and that assumption is stated
-rather than hidden.
+— and it has produced discriminating results in both directions on real data. The
+same two lenses, written with deliberately opposed methods (a CWE taxonomy walk
+and sink-first flow tracing), measured **0.45** against 66 OWASP Benchmark cases
+and **1.0** against a 20-case deception corpus, where they returned byte-for-byte
+identical detections.
+
+At 1.0 the weighting scores their agreement as **one** effective confirmation, not
+two — because that is what it is worth. That is a question you can act on: drop
+the redundant lens, or replace it with one that fails differently.
+
+## Consensus ranking — an unvalidated hypothesis
+
+Findings are also ranked by *effective independent confirmations*: 1 for a single
+lens, and for a set, 1 plus the summed independence of every distinct pair.
+
+**Whether that ranking predicts correctness is unproven, and this section is
+deliberately not the headline.** Six calibration rounds — two self-authored
+fixtures, an external corpus of 2,740 labeled cases, two model tiers, a
+purpose-built deception corpus, and a controlled prompt ablation — produced
+**one** false positive in total. An error filter cannot be measured on a process
+that does not err.
+
+The claim is not refuted; the pre-registered refutation condition never triggered.
+It is unfalsifiable with the means available, so the score stays in the code and
+in the report, labelled as a hypothesis rather than a feature that has earned its
+ranking. Full record, including every failed prediction and one methodological
+error of mine that voided a round:
+[`fixtures/calibration/PREREGISTERED.md`](fixtures/calibration/PREREGISTERED.md).
 
 ### Matching is fuzzy, because real lens output is
 
@@ -67,36 +90,23 @@ expect first, and six pairs is a small sample. `test/merge-realdata.test.mjs`
 pins both bands using verbatim lens output, so the thresholds cannot drift
 unnoticed. Re-measure when the roster or the lens prompts change.
 
-**What is and is not established.** The mechanism fires on real output, and
-distinct same-line defects are correctly kept apart. Whether consensus *predicts
-correctness* is **unvalidated after five rounds**, including one against an
-external corpus of 66 [OWASP Benchmark](https://owasp.org/www-project-benchmark/)
-cases — 33 of them safe code written by someone else to bait tools.
+**The one informative error.** Across every round, exactly one false positive
+occurred — and **both** lenses produced it. A safe case built
+`"{call " + param + "}"` and executed it, but `param` came from a helper named
+`SeparateClassRequest` whose `getTheValue` returns the constant `"bar"`. Neither
+lens opened it; both inferred taint from the name.
 
-Every round has failed to test the claim the same way: the lenses are almost
-always right, so there is nearly nothing for consensus to discriminate. On the
-corpus run, recall and specificity were both 97% and there was exactly **one**
-false positive — below the pre-registered threshold of three.
+Independence of *method* does not give independence of *failure*. Those lenses
+measured only ~45% redundant and still failed identically, because both had to
+resolve the same opaque helper. **Consensus cannot filter an error whose cause is
+shared** — a real limit on agreement weighting, and one invisible in any
+evaluation where the lenses do not err.
 
-That one false positive is the most useful thing measured so far, and it cuts
-against the mechanism. **Both** lenses flagged a safe case: it builds
-`"{call " + param + "}"` and executes it, but `param` comes from a helper named
-`SeparateClassRequest` whose `getTheValue` returns the constant `"bar"` and
-ignores its argument. Neither lens opened the helper; both inferred taint from the
-name.
-
-So independence of *method* does not give independence of *failure*. The two
-lenses reason differently and measure only ~45% redundant, yet they failed
-identically, because both had to resolve the same opaque helper. **Consensus
-cannot filter an error whose cause is shared** — a real limit on agreement
-weighting, and one invisible in any evaluation where the lenses do not err.
-
-Worth noting too: `lenses/taint.md` warns against that exact mistake twice, and
-committed it anyway. A caveat in a prompt is not enforcement.
-
-Criteria were fixed before each round and every outcome is recorded in
-[`fixtures/calibration/PREREGISTERED.md`](fixtures/calibration/PREREGISTERED.md),
-including the rounds that failed to test anything.
+A purpose-built corpus reproducing that trap failed to reproduce the failure:
+given 20 small modules with direct imports, both lenses opened the helpers
+unprompted and scored 20/20, with and without a hint. The difference appears to be
+context load — 22 unfamiliar files deep in a large repository versus 20 small ones
+— which points at real production code as the only place left to measure this.
 
 ## SARIF output
 
