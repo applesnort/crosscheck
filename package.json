@@ -1,7 +1,7 @@
 {
   "name": "crosscheck",
   "version": "0.1.0",
-  "description": "Run independent review lenses in parallel and merge their findings into one deduped, consensus-ranked report — with SARIF output.",
+  "description": "Run independent review lenses in parallel and merge their findings into one deduped, consensus-ranked report \u2014 with SARIF output.",
   "license": "MIT",
   "author": "Joel Mangin",
   "type": "module",
@@ -24,8 +24,11 @@
     "bin/",
     "lib/",
     "lenses/",
+    "fixtures/calibration/",
     "foreman.md",
-    "PROVENANCE.md"
+    "PROVENANCE.md",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs"

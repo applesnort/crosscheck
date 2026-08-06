@@ -1,0 +1,49 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20.x', '22.x', '24.x']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # No dependencies by design, so there is nothing to install.
+      - name: Unit tests
+        run: node --test test/*.test.mjs
+
+  calibrate:
+    # The panel's own scorer, run against a recorded lens output. Exits non-zero
+    # if a planted defect goes unfound, so a regression in the merge or the
+    # matching rules fails CI rather than quietly degrading a report.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+      - name: Report round-trips a recorded run
+        run: |
+          printf '%s' '[{"lens":"check","output":"lib/a.js:41 — BLOCK — expires stored as a number, TTL index never fires — store a Date"},{"lens":"architect","output":"lib/a.js:41 — warning — Expires stored as a number so the TTL index never fires — store a Date"}]' > /tmp/run.json
+          node bin/crosscheck.mjs report --in /tmp/run.json
+      - name: Two lenses on one defect must merge to one consensus finding
+        run: |
+          node bin/crosscheck.mjs report --in /tmp/run.json > /tmp/out.txt
+          grep -q 'CONSENSUS' /tmp/out.txt
+          # One merged finding, not two: an exact-match merge would print both.
+          test "$(grep -c 'lib/a.js' /tmp/out.txt)" = "1"
+      - name: SARIF output is valid JSON at the expected version
+        run: |
+          node bin/crosscheck.mjs sarif --in /tmp/run.json --lenses lenses --out /tmp/out.sarif
+          node -e "const s=require('node:fs').readFileSync('/tmp/out.sarif','utf8');const d=JSON.parse(s);if(d.version!=='2.1.0')throw new Error('bad version '+d.version);if(!d.runs[0].results.length)throw new Error('no results');console.log('sarif ok:',d.runs[0].results.length,'result(s)')"
