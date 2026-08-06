@@ -459,3 +459,64 @@ reproducing round 2's `BenchmarkTest00052` failure and finally supplying shared
 false positives. If they are declined again, these lenses do not commit the
 name-inference error unprompted, round 2's single false positive was a fluke, and
 the claim is abandoned as untestable by any means available here.
+
+---
+
+# Round 4 outcome — recorded 2026-08-05. Last round on this question.
+
+Identical corpus, identical frozen lenses, one sentence removed from the dispatch
+prompt. Result identical to round 3: **20/20**, recall 100%, specificity 100%,
+zero false positives, zero solo detections, overlap 1.0. Both lenses again
+returned the same seven files.
+
+**The prediction failed.** `ts01` and `ts02` were declined again. Without any
+prompting, both lenses opened `helpers/requestValues.js`, saw that `getUserInput`
+and `readParam` return constants, and said nothing. The hint I removed was not
+what saved them in round 3 — they simply do not commit the name-inference error
+here.
+
+## Conclusion: the claim is abandoned as untestable by available means
+
+Six rounds. Two self-authored fixtures, one external corpus of 2,740 cases, two
+model tiers, a purpose-built deception corpus, and a controlled prompt ablation.
+Total false positives observed across all of it: **one**.
+
+The obstacle was never fixture quality. It is that these lenses, on small
+self-contained modules with visible imports, are close to perfect — and an error
+filter cannot be measured on a process that does not err. Benchmark-shaped code is
+where LLM review is *strongest*, which makes it precisely the wrong place to
+measure this.
+
+Round 2's single false positive is worth one more note. It occurred at 22 unfamiliar
+Java files per agent, with the deceptive helper several imports deep in a large
+repository. Rounds 3 and 4 gave 20 small modules with direct imports and produced
+nothing. That suggests the error rate is driven by context load and unfamiliarity
+rather than by the trap itself — which is consistent with needing real production
+code to observe, and is exactly what cannot be assembled with reliable ground
+truth here.
+
+The claim is therefore **not refuted** — the pre-registered refutation condition
+(consensus precision at or below solo, given at least three false positives) never
+triggered. It is unfalsifiable with the means available, and an unfalsifiable
+claim does not get to be a headline. The consensus score stays in the code and in
+the report, documented as an unvalidated hypothesis.
+
+## What *is* established, and becomes the headline instead
+
+The independence measurement works and has produced meaningful, discriminating
+results on real data in both directions:
+
+- **0.4545** on OWASP Benchmark — two lenses with genuinely different methods,
+  meaningfully independent.
+- **1.0** on the deception corpus — the same two lenses, byte-for-byte identical
+  detection sets, and the weighting correctly scored their agreement as worth
+  exactly one lens rather than two.
+
+A tool that tells you *your roster is redundant on your code* is answering a
+question you can act on: drop a lens, or replace it with one that fails
+differently. That is measured, reproducible, and does not depend on the
+unvalidated claim.
+
+No further rounds on this question. Reopening it requires a corpus of real
+production code with independently authored ground truth, and new criteria fixed
+in advance.
