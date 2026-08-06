@@ -21,6 +21,9 @@ spawning anything.
 
 No dependencies, no install step, 153 tests.
 
+> **v0.x — the API is unstable.** The CLI commands and the `lib/` exports may
+> change shape before 1.0. Pin an exact version if you depend on it.
+
 ## SARIF output
 
 Findings are emitted as [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html),
