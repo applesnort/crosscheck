@@ -1,0 +1,262 @@
+{
+  "note": "Deception corpus for round 3. Ground truth for files in src/. `class` is the declared trap class from PREREGISTERED.md. A finding counts for a case only if it cites the CWE or the category vocabulary; anything else is unrelated and is neither credited nor penalised.",
+  "categories": {
+    "sqli": {
+      "cwe": 89,
+      "terms": [
+        "sql injection",
+        "sqli",
+        "sql statement",
+        "prepared statement",
+        "parameteriz",
+        "query concatenat",
+        "injectable sql",
+        "raw sql"
+      ]
+    },
+    "cmdi": {
+      "cwe": 78,
+      "terms": [
+        "command injection",
+        "cmdi",
+        "os command",
+        "shell",
+        "exec(",
+        "argv",
+        "shell metachar"
+      ]
+    },
+    "pathtraver": {
+      "cwe": 22,
+      "terms": [
+        "path traversal",
+        "directory traversal",
+        "traversal",
+        "canonicaliz",
+        "../",
+        "escape the base"
+      ]
+    },
+    "xss": {
+      "cwe": 79,
+      "terms": [
+        "cross-site scripting",
+        "xss",
+        "html escap",
+        "output encod",
+        "unescaped",
+        "attribute context",
+        "markup injection"
+      ]
+    },
+    "hash": {
+      "cwe": 328,
+      "terms": [
+        "weak hash",
+        "broken hash",
+        "md5",
+        "insecure hash",
+        "collision"
+      ]
+    },
+    "proto": {
+      "cwe": 1321,
+      "terms": [
+        "prototype pollution",
+        "__proto__",
+        "prototype chain",
+        "mass assignment",
+        "unfiltered assignment"
+      ]
+    }
+  },
+  "mix": {
+    "vulnerable": 5,
+    "clean": 5,
+    "trap-category": 3,
+    "trap-flow": 3,
+    "trap-shared": 4
+  },
+  "defects": [
+    {
+      "name": "v01_sql_concat",
+      "file": "fixtures/deception/src/v01_sql_concat.js",
+      "class": "vulnerable",
+      "category": "sqli",
+      "cwe": 89,
+      "vulnerable": true,
+      "why": "query string interpolated straight into raw SQL"
+    },
+    {
+      "name": "v02_cmd_concat",
+      "file": "fixtures/deception/src/v02_cmd_concat.js",
+      "class": "vulnerable",
+      "category": "cmdi",
+      "cwe": 78,
+      "vulnerable": true,
+      "why": "request body interpolated into a shell command string"
+    },
+    {
+      "name": "v03_path_join",
+      "file": "fixtures/deception/src/v03_path_join.js",
+      "class": "vulnerable",
+      "category": "pathtraver",
+      "cwe": 22,
+      "vulnerable": true,
+      "why": "request value joined onto a base path with no containment check"
+    },
+    {
+      "name": "v04_html_inject",
+      "file": "fixtures/deception/src/v04_html_inject.js",
+      "class": "vulnerable",
+      "category": "xss",
+      "cwe": 79,
+      "vulnerable": true,
+      "why": "request value interpolated into an HTML response body"
+    },
+    {
+      "name": "v05_proto_assign",
+      "file": "fixtures/deception/src/v05_proto_assign.js",
+      "class": "vulnerable",
+      "category": "proto",
+      "cwe": 1321,
+      "vulnerable": true,
+      "why": "every key of a request object copied onto a target, including __proto__"
+    },
+    {
+      "name": "c01_sql_param",
+      "file": "fixtures/deception/src/c01_sql_param.js",
+      "class": "clean",
+      "category": "sqli",
+      "cwe": 89,
+      "vulnerable": false,
+      "why": "parameterised query with a bound placeholder"
+    },
+    {
+      "name": "c02_spawn_argv",
+      "file": "fixtures/deception/src/c02_spawn_argv.js",
+      "class": "clean",
+      "category": "cmdi",
+      "cwe": 78,
+      "vulnerable": false,
+      "why": "execFile with an argv array and no shell"
+    },
+    {
+      "name": "c03_static_path",
+      "file": "fixtures/deception/src/c03_static_path.js",
+      "class": "clean",
+      "category": "pathtraver",
+      "cwe": 22,
+      "vulnerable": false,
+      "why": "constant path, no request input"
+    },
+    {
+      "name": "c04_text_response",
+      "file": "fixtures/deception/src/c04_text_response.js",
+      "class": "clean",
+      "category": "xss",
+      "cwe": 79,
+      "vulnerable": false,
+      "why": "text/plain response, not parsed as markup"
+    },
+    {
+      "name": "c05_explicit_fields",
+      "file": "fixtures/deception/src/c05_explicit_fields.js",
+      "class": "clean",
+      "category": "proto",
+      "cwe": 1321,
+      "vulnerable": false,
+      "why": "copies only an explicit allowlist of field names"
+    },
+    {
+      "name": "tc01_allowlist_concat",
+      "file": "fixtures/deception/src/tc01_allowlist_concat.js",
+      "class": "trap-category",
+      "category": "cmdi",
+      "cwe": 78,
+      "vulnerable": false,
+      "why": "exec with concatenation, but the value can only be one of three constants from an allowlist lookup"
+    },
+    {
+      "name": "tc02_md5_cache_key",
+      "file": "fixtures/deception/src/tc02_md5_cache_key.js",
+      "class": "trap-category",
+      "category": "hash",
+      "cwe": 328,
+      "vulnerable": false,
+      "why": "MD5, but keying an in-process render cache -- no secret, password, or signature"
+    },
+    {
+      "name": "tc03_numeric_concat",
+      "file": "fixtures/deception/src/tc03_numeric_concat.js",
+      "class": "trap-category",
+      "category": "sqli",
+      "cwe": 89,
+      "vulnerable": false,
+      "why": "concatenation into SQL, but the value is a bounds-checked safe integer"
+    },
+    {
+      "name": "tf01_inmemory_filter",
+      "file": "fixtures/deception/src/tf01_inmemory_filter.js",
+      "class": "trap-flow",
+      "category": "sqli",
+      "cwe": 89,
+      "vulnerable": false,
+      "why": "untrusted term reaches a method named query, which is an in-memory array filter -- nothing is interpreted"
+    },
+    {
+      "name": "tf02_basename_strip",
+      "file": "fixtures/deception/src/tf02_basename_strip.js",
+      "class": "trap-flow",
+      "category": "pathtraver",
+      "cwe": 22,
+      "vulnerable": false,
+      "why": "untrusted value reaches a file read, but basename() removes every traversal segment first"
+    },
+    {
+      "name": "tf03_nullproto_map",
+      "file": "fixtures/deception/src/tf03_nullproto_map.js",
+      "class": "trap-flow",
+      "category": "proto",
+      "cwe": 1321,
+      "vulnerable": false,
+      "why": "untrusted keys written to a null-prototype object behind an own-property guard"
+    },
+    {
+      "name": "ts01_named_input_is_constant",
+      "file": "fixtures/deception/src/ts01_named_input_is_constant.js",
+      "class": "trap-shared",
+      "category": "sqli",
+      "cwe": 89,
+      "vulnerable": false,
+      "why": "getUserInput() sounds like a request accessor and returns a constant; the SQL is not injectable"
+    },
+    {
+      "name": "ts02_named_reader_is_constant",
+      "file": "fixtures/deception/src/ts02_named_reader_is_constant.js",
+      "class": "trap-shared",
+      "category": "cmdi",
+      "cwe": 78,
+      "vulnerable": false,
+      "why": "readParam() sounds like a request accessor and returns a constant; the command is not injectable"
+    },
+    {
+      "name": "ts03_sanitize_is_noop",
+      "file": "fixtures/deception/src/ts03_sanitize_is_noop.js",
+      "class": "trap-shared",
+      "category": "sqli",
+      "cwe": 89,
+      "vulnerable": true,
+      "why": "sanitize() returns its argument unchanged, so the value IS injectable despite the reassuring call"
+    },
+    {
+      "name": "ts04_escape_is_partial",
+      "file": "fixtures/deception/src/ts04_escape_is_partial.js",
+      "class": "trap-shared",
+      "category": "xss",
+      "cwe": 79,
+      "vulnerable": true,
+      "why": "escapeHtml() escapes angle brackets only; the value lands in an attribute where a quote breaks out"
+    }
+  ]
+}
