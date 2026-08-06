@@ -20,7 +20,10 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       # No dependencies by design, so there is nothing to install.
-      - name: Unit tests
+      - name: Unit and CLI smoke tests
+        # test/cli-smoke.test.mjs spawns the real binary against a real
+        # directory. Every bug that reached a user lived in a seam between
+        # correct units, which is precisely what unit tests cannot see.
         run: node --test test/*.test.mjs
 
   calibrate:

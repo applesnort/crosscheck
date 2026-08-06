@@ -282,10 +282,12 @@ async function runCommand(options, positional) {
   if (positional.length === 0) {
     fail('run needs at least one path to audit');
   }
+  // Resolve the target first: a bad path is the more fundamental error, and
+  // reporting a missing flag instead sends the user after the wrong problem.
+  const files = collectFiles(positional);
   if (!options.exec && !options['dry-run']) {
     fail("run needs --exec '<command>' (or --dry-run to see the prompts)");
   }
-  const files = collectFiles(positional);
   const lensDir = resolveLensDir(options.lenses);
   const lenses = loadLenses(lensDir);
   const overrides = {
