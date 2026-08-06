@@ -19,7 +19,38 @@ or your own wrapper. crosscheck owns prompt construction, routing, fan-out, dedu
 and output; you own the model. `--dry-run` prints the roster and prompts without
 spawning anything.
 
-No dependencies, no install step, 153 tests.
+No dependencies, no install step, 183 tests.
+
+## Configuration
+
+Retyping `--exec` on every run pushes people toward shell aliases nobody else on
+the team can see. Commit a `.crosscheckrc.json` instead:
+
+```json
+{
+  "exec": "claude -p",
+  "concurrency": 2,
+  "skip": ["ux"],
+  "sarif": "panel.sarif"
+}
+```
+
+Then the whole command is:
+
+```bash
+npx @applesnort/crosscheck run src/
+```
+
+The nearest config is used, searching upward from the working directory and
+stopping at a repo root, so running from a subdirectory still picks up the
+project's settings. The loaded path is printed on every run — a run silently
+reshaped by a forgotten file is the kind of thing this tool refuses everywhere
+else. Command-line flags override the file, `--config <file>` points elsewhere,
+and an unrecognised key is an error rather than a silent no-op, because a
+misspelled `exec` that quietly does nothing is worse than a crash.
+
+Accepted keys: `exec`, `lenses`, `concurrency`, `only`, `skip`, `mixed`, `out`,
+`sarif`, `baseline`, `overlap`. Keys beginning `//` are treated as comments.
 
 > **v0.x — the API is unstable.** The CLI commands and the `lib/` exports may
 > change shape before 1.0. Pin an exact version if you depend on it.
@@ -168,6 +199,7 @@ lib/
 lib/
   prompt.mjs            lens prompt construction
   run.mjs               roster planning and bounded fan-out
+  config.mjs            .crosscheckrc.json discovery and validation
 bin/crosscheck.mjs      CLI: run | report | sarif | baseline | overlap | calibrate
 fixtures/calibration/   planted defects, ground truth, and the calibration record
 fixtures/deception/     20 modules that look safe and are not, or the reverse
@@ -211,7 +243,7 @@ band.** A parallel fan-out that renders inline floods the session you are workin
 in and has to be killed to recover it.
 
 ```bash
-npm test   # 153 tests, no dependencies
+npm test   # 183 tests, no dependencies
 ```
 
 ## Adding a lens

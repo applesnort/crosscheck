@@ -28,6 +28,12 @@
 //
 // Options: --overlap <file>  independence data from `overlap` (report/sarif)
 //          --lenses <dir>    lens directory (routing + SARIF rule metadata)
+//          --config <file>   config file (default: nearest .crosscheckrc.json,
+//                            searching upward and stopping at a repo root)
+//
+// Settings may live in .crosscheckrc.json so a team shares one panel definition
+// instead of a shell alias nobody else can see. Command-line flags win over it.
+//   {"exec": "claude -p", "concurrency": 2, "skip": ["ux"]}
 //
 // `run` dispatches the lenses itself. crosscheck never talks to a model: --exec
 // names a command that receives one lens prompt on stdin and returns findings on
@@ -43,6 +49,7 @@ import {
 } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { formatScore, score } from '../lib/calibrate.mjs';
+import { findConfig, mergeConfig, validateConfig } from '../lib/config.mjs';
 import { parseFrontmatter } from '../lib/lenses.mjs';
 import {
   countsBySeverity, lensOverlap, mergeFindings, panelVerdict
@@ -278,7 +285,43 @@ function write(options, text) {
   }
 }
 
-async function runCommand(options, positional) {
+// Load the nearest config file, stopping at a repo root so a stray file in a
+// parent directory cannot silently reshape the run. The path is always
+// reported: a run configured by a file the user forgot about is the sort of
+// invisible behaviour this tool rejects everywhere else.
+function loadConfig(explicitPath) {
+  const path = explicitPath ?? findConfig(process.cwd(), {
+    exists: p => existsSync(p),
+    isRoot: dir => existsSync(join(dir, '.git'))
+  });
+  if (!path) {
+    return { config: {}, path: null };
+  }
+  if (!existsSync(path)) {
+    fail(`no such config file: ${path}`);
+  }
+  let raw;
+  try {
+    raw = JSON.parse(readFileSync(path, 'utf8'));
+  } catch (error) {
+    fail(`${path} is not valid JSON: ${error.message}`);
+  }
+  const { config, problems } = validateConfig(raw, path);
+  if (problems.length) {
+    for (const problem of problems) {
+      process.stderr.write(`crosscheck: ${problem}\n`);
+    }
+    fail('fix the config file, or pass --config to point elsewhere');
+  }
+  return { config, path };
+}
+
+async function runCommand(cliOptions, positional) {
+  const { config, path: configPath } = loadConfig(cliOptions.config);
+  const options = mergeConfig(config, cliOptions);
+  if (configPath) {
+    process.stderr.write(`crosscheck: config ${configPath}\n`);
+  }
   if (positional.length === 0) {
     fail('run needs at least one path to audit');
   }
@@ -290,10 +333,8 @@ async function runCommand(options, positional) {
   }
   const lensDir = resolveLensDir(options.lenses);
   const lenses = loadLenses(lensDir);
-  const overrides = {
-    only: options.only?.split(',').map(s => s.trim()).filter(Boolean),
-    skip: options.skip?.split(',').map(s => s.trim()).filter(Boolean)
-  };
+  // mergeConfig has already normalised these to arrays from either source.
+  const overrides = { only: options.only, skip: options.skip };
   const { roster, skipped, unmatched } = planRun(lenses, files, overrides);
 
   process.stderr.write(

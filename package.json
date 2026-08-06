@@ -1,6 +1,6 @@
 {
   "name": "@applesnort/crosscheck",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Run independent review lenses in parallel and merge their findings into one deduped, consensus-ranked report \u2014 with SARIF output.",
   "license": "MIT",
   "author": "Joel Mangin",
@@ -20,7 +20,8 @@
     "./lenses": "./lib/lenses.mjs",
     "./calibrate": "./lib/calibrate.mjs",
     "./run": "./lib/run.mjs",
-    "./prompt": "./lib/prompt.mjs"
+    "./prompt": "./lib/prompt.mjs",
+    "./config": "./lib/config.mjs"
   },
   "files": [
     "bin/",
