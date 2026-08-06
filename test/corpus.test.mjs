@@ -320,3 +320,21 @@ test('scoring no cases yields nulls, not fabricated numbers', () => {
   assert.equal(result.soloPrecision, null);
   assert.equal(result.recall, null);
 });
+
+test('a corpus may supply its own category vocabulary', () => {
+  const custom = { proto: { cwe: 1321, terms: ['prototype pollution', 'mass assignment'] } };
+  const tc = { name: 'X', category: 'proto', cwe: 1321, vulnerable: true };
+  // unknown to the built-in OWASP table
+  assert.equal(findingMatchesCase({ issue: 'mass assignment of every key' }, tc), false);
+  assert.equal(
+    findingMatchesCase({ issue: 'mass assignment of every key' }, tc, custom), true);
+  const r = scoreCaseAgreement(
+    [{ testCase: tc, findings: [{ lens: 'a', issue: 'prototype pollution here' }] }],
+    { categories: custom });
+  assert.equal(r.truePositives, 1);
+});
+
+test('a CWE cited by number still matches when the category is custom', () => {
+  const tc = { name: 'X', category: 'proto', cwe: 1321, vulnerable: true };
+  assert.equal(findingMatchesCase({ issue: 'see CWE-1321' }, tc, {}), true);
+});

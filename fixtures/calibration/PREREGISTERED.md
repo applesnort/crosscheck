@@ -381,3 +381,81 @@ chosen. It can establish the mechanism by which consensus helps or fails, and
 whether the tool's own overlap measurement predicts which case you are in. That
 is the claim the README will be allowed to make if the predictions hold — no
 broader one.
+
+---
+
+# Round 3 outcome — recorded 2026-08-05
+
+20 cases, two lenses, one batch each. Zero unparsed, zero unmapped.
+
+| | |
+|---|---|
+| recall | **100%** (7/7) |
+| specificity | **100%** (13/13) |
+| false positives | **0** |
+| consensus detections | 7, precision 100% |
+| solo detections | **0** |
+| measured lens overlap | **1.0** |
+
+## All four predictions failed
+
+1. Consensus exceeds solo precision — **untestable**: there were no solo
+   detections at all.
+2. At least 3 false positives — **failed**: zero.
+3. Both `trap-shared` false-positive cases flagged by both lenses — **failed**:
+   both were correctly declined.
+4. Lens overlap stays below 1.0 — **failed**: it is exactly 1.0. The two lenses
+   returned *identical* detection sets across all 20 cases.
+
+Verdict: **INCONCLUSIVE**, round six. Per the criteria, a second failure of
+prediction 2 means the corpus was too easy and is reported as such, not retried
+with harder traps under the same rules.
+
+## I compromised the shared traps myself
+
+The dispatch prompt included this line:
+
+> The modules import from `helpers/` and `db.js`. You may and should read those
+> too — what a helper is named and what it does are separate questions.
+
+That is a direct hint defeating the entire `trap-shared` class. Those four cases
+exist to test whether a lens infers behaviour from a helper's name, and the prompt
+told the lenses not to. The `trap-shared` results are therefore void: they measure
+whether a coached reviewer opens a helper, which was never in doubt.
+
+`trap-category` and `trap-flow` received no such hint and were still declined
+perfectly — six for six. Those results stand, and they say the lenses do not bite
+on idiom-matching or on inert sinks.
+
+## What the overlap of 1.0 actually shows
+
+This is the round's real result, and it is not about the consensus claim.
+
+`security-check` and `taint` were written with deliberately different methods — a
+CWE taxonomy walk versus sink-first flow tracing — and on OWASP Benchmark they
+measured 0.4545 overlap, meaningfully independent. On this corpus they produced
+*byte-for-byte equivalent* detection sets: same 7 files, same verdicts.
+
+The independence weighting handled that correctly. At overlap 1.0 it scores their
+agreement as **1.0 effective confirmations** — worth exactly one lens, because
+that is what it is worth. The mechanism detected a redundant roster and refused to
+inflate confidence for it.
+
+So the weighting has now done useful work twice, on real data, in both directions:
+0.45 on a corpus where the lenses differed, 1.0 on one where they did not. That
+capability — *telling you whether your roster is redundant on your code* — is
+measured and defensible. It is not the same as the claim that consensus predicts
+correctness, which remains unproven.
+
+## Round 4: repeat without the hint
+
+The one experiment this round should have run. Same 20 cases, same frozen lenses,
+same criteria — with the helper-reading sentence removed from the dispatch prompt.
+This corrects my methodological error rather than making the corpus harder, and
+that distinction is why it is permitted under the rules above.
+
+Prediction, recorded now: **both `ts01` and `ts02` are flagged by both lenses**,
+reproducing round 2's `BenchmarkTest00052` failure and finally supplying shared
+false positives. If they are declined again, these lenses do not commit the
+name-inference error unprompted, round 2's single false positive was a fluke, and
+the claim is abandoned as untestable by any means available here.
