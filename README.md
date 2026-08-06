@@ -7,10 +7,10 @@ land in the same places static-analysis findings already do.
 ```bash
 # run a panel: crosscheck builds the prompts and merges the results,
 # your --exec command supplies the model
-npx crosscheck run lib/ --exec 'claude -p' --sarif panel.sarif
+npx @applesnort/crosscheck run lib/ --exec 'claude -p' --sarif panel.sarif
 
 # or merge output a panel already produced
-npx crosscheck report --in run.json
+npx @applesnort/crosscheck report --in run.json
 ```
 
 **crosscheck never talks to a model itself.** `--exec` names any command that takes
@@ -23,6 +23,10 @@ No dependencies, no install step, 153 tests.
 
 > **v0.x — the API is unstable.** The CLI commands and the `lib/` exports may
 > change shape before 1.0. Pin an exact version if you depend on it.
+>
+> Published as `@applesnort/crosscheck`; npm rejects the unscoped name as too
+> similar to the (abandoned) `cross-check`. Installed, the command is
+> `crosscheck`.
 
 ## SARIF output
 

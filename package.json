@@ -1,5 +1,5 @@
 {
-  "name": "crosscheck",
+  "name": "@applesnort/crosscheck",
   "version": "0.2.0",
   "description": "Run independent review lenses in parallel and merge their findings into one deduped, consensus-ranked report \u2014 with SARIF output.",
   "license": "MIT",
@@ -46,5 +46,8 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/applesnort/crosscheck.git"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
