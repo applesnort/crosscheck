@@ -7,6 +7,13 @@ on:
 
 permissions: {}
 
+# Without this, every push spawns a full matrix that never supersedes the last.
+# Runs then queue behind each other and get cancelled by contention rather than
+# by intent, which reads as a test failure and is not one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
