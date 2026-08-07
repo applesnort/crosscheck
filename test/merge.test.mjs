@@ -242,3 +242,34 @@ test('merging nothing is empty, not a crash', () => {
     assert.deepEqual(r.incomplete, []);
   }
 });
+
+test('a collapsed run of nearby findings reports how many it absorbed', () => {
+  // Clustering is transitive: line 1 merges with 2, the cluster then reaches 4,
+  // and a run of similar findings chains into one entry. That is defensible, but
+  // it must not look like a single report.
+  const findings = Array.from({ length: 8 }, (_, i) =>
+    at('a.js', i + 1, 'blocker', 'unescaped value written to the response'));
+  const { findings: merged } = mergeFindings([{ lens: 'check', findings }]);
+  assert.equal(merged.length, 1, 'they do chain into one');
+  assert.equal(merged[0].occurrences, 8, 'and the count is preserved');
+  assert.deepEqual(merged[0].lines, [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.equal(merged[0].consensus, false, 'one lens is not consensus');
+});
+
+test('an ordinary finding records a single occurrence', () => {
+  const { findings } = mergeFindings([
+    { lens: 'check', findings: [at('a.js', 4, 'blocker', 'a lone defect')] }
+  ]);
+  assert.equal(findings[0].occurrences, 1);
+  assert.deepEqual(findings[0].lines, [4]);
+});
+
+test('two lenses on one defect is two occurrences and one lens pair', () => {
+  const { findings } = mergeFindings([
+    { lens: 'check', findings: [at('a.js', 4, 'blocker', 'the same defect')] },
+    { lens: 'taint', findings: [at('a.js', 5, 'blocker', 'The same defect!')] }
+  ]);
+  assert.equal(findings[0].occurrences, 2);
+  assert.equal(findings[0].lenses.length, 2);
+  assert.equal(findings[0].consensus, true);
+});

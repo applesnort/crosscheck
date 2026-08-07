@@ -19,7 +19,42 @@ or your own wrapper. crosscheck owns prompt construction, routing, fan-out, dedu
 and output; you own the model. `--dry-run` prints the roster and prompts without
 spawning anything.
 
-No dependencies, no install step, 247 tests.
+No dependencies, no install step, 267 tests.
+
+## Getting set up
+
+```bash
+npx @applesnort/crosscheck init
+```
+
+Scaffolds `.crosscheckrc.json`, a `.crosscheck/lenses/` directory with a note on
+writing lenses, and a `.github/workflows/crosscheck.yml` that reviews each pull
+request, uploads SARIF to code scanning, and posts a summary comment. Existing
+files are left alone unless you pass `--force`.
+
+Set `exec` to whatever runs your model, then:
+
+```bash
+crosscheck run --diff --dry-run
+```
+
+## In CI
+
+The scaffolded workflow reviews the diff against the base branch, and does two
+things with the result:
+
+- **SARIF to code scanning** — per-line annotations in the Files changed view,
+  which is where a reviewer is already looking.
+- **A summary comment** via `--comment-file`, carrying what per-line annotations
+  cannot: which lenses were skipped and why, which died, what the baseline
+  suppressed, and how many findings verification refuted.
+
+The comment embeds a marker so later runs **edit** it rather than stacking. A pull
+request with eleven bot comments gets muted, and a muted reviewer finds nothing.
+
+The workflow checks out with `fetch-depth: 0`, because reviewing a diff needs the
+base commit. crosscheck itself never talks to a model — supply whatever your
+`exec` command needs via the workflow's `env`.
 
 ## Configuration
 
@@ -51,8 +86,8 @@ misspelled `exec` that quietly does nothing is worse than a crash.
 
 Accepted keys: `exec`, `lenses`, `concurrency`, `only`, `skip`, `mixed`, `out`,
 `sarif`, `baseline`, `overlap`, `preflight`, `context`, `verify`, `since`,
-`max-dispatches`, `no-cache`, `cache-dir`. `exec` accepts a string or a per-lens
-map. Keys beginning `//` are treated as comments.
+`max-dispatches`, `no-cache`, `cache-dir`, `comment-file`. `exec` accepts a string
+or a per-lens map. Keys beginning `//` are treated as comments.
 
 > **v0.x — the API is unstable.** The CLI commands and the `lib/` exports may
 > change shape before 1.0. Pin an exact version if you depend on it.
@@ -298,8 +333,9 @@ lib/
   config.mjs            .crosscheckrc.json discovery and validation
   target.mjs            diff parsing, changed line ranges
   cache.mjs             content-addressed result cache
-bin/crosscheck.mjs      CLI: run | lenses | report | sarif | baseline |
-                             overlap | calibrate
+  comment.mjs           pull-request summary comment
+bin/crosscheck.mjs      CLI: init | run | lenses | report | sarif |
+                             baseline | overlap | calibrate
 fixtures/calibration/   planted defects, ground truth, and the calibration record
 fixtures/deception/     20 modules that look safe and are not, or the reverse
 PROVENANCE.md           where all of this came from

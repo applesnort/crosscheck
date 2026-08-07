@@ -30,11 +30,22 @@ nothing.
   or files were dropped. A silent partial run is the failure this tool exists to
   avoid.
 
-## Phase 3 — adoption in one file
+## Phase 3 — adoption in one file ✅
 
-- a GitHub Action wrapping `run` plus SARIF upload to code scanning
-- PR review comments via `gh`
-- `crosscheck init` — scaffold a config, a lens directory, and a workflow
+- `crosscheck init` scaffolds a config, a lens directory, and a workflow
+- the workflow uploads SARIF to code scanning and posts a summary comment,
+  editing its own previous comment rather than stacking
+- `--comment-file` writes the body; the workflow posts it with `gh`
+
+Deliberately **not** per-line review comments: SARIF in code scanning already
+annotates exact lines in the Files changed view and does it better than a bot
+posting threads. The comment carries what that view cannot — which lenses were
+skipped and why, which died, what the baseline suppressed, what verification
+refuted.
+
+A published composite action was considered and dropped. It would pin crosscheck's
+version inside a second release process, and `npx @applesnort/crosscheck` in a
+scaffolded workflow is one line either way.
 
 ## Phase 4 — Digital Bazaar harness integration
 

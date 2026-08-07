@@ -13,7 +13,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, chmodSync } from 'node:fs';
+import {
+  chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -191,4 +193,62 @@ test('--out saves raw lens text that report can rescore', () => {
   assert.ok(parsed.some(r => typeof r.output === 'string' && r.output.length),
     'raw lens output is preserved for rescoring');
   assert.match(run(['report', '--in', saved]), /## BLOCK/);
+});
+
+test('init scaffolds a config, a lens directory, and a workflow', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'crosscheck-init-'));
+  const out = execFileSync(process.execPath, [CLI, 'init'],
+    { cwd: dir, encoding: 'utf8' });
+  assert.match(out, /Created:/);
+  for (const path of [
+    '.crosscheckrc.json', '.crosscheck/lenses/README.md',
+    '.github/workflows/crosscheck.yml'
+  ]) {
+    assert.ok(readFileSync(join(dir, path), 'utf8').length, `${path} written`);
+  }
+  const wf = readFileSync(join(dir, '.github/workflows/crosscheck.yml'), 'utf8');
+  assert.match(wf, /fetch-depth: 0/, 'a diff review needs the base commit');
+  assert.match(wf, /crosscheck:report/, 'the workflow edits its own comment');
+  assert.match(wf, /security-events: write/, 'SARIF upload needs the permission');
+});
+
+test('init refuses to overwrite, and --force does', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'crosscheck-init2-'));
+  writeFileSync(join(dir, '.crosscheckrc.json'), '{"exec":"mine"}');
+  const kept = execFileSync(process.execPath, [CLI, 'init'],
+    { cwd: dir, encoding: 'utf8' });
+  assert.match(kept, /Left alone/);
+  assert.equal(
+    JSON.parse(readFileSync(join(dir, '.crosscheckrc.json'), 'utf8')).exec,
+    'mine', 'a tuned config must survive');
+  execFileSync(process.execPath, [CLI, 'init', '--force'],
+    { cwd: dir, encoding: 'utf8' });
+  assert.notEqual(
+    JSON.parse(readFileSync(join(dir, '.crosscheckrc.json'), 'utf8')).exec,
+    'mine', '--force replaces it');
+});
+
+test('a scaffolded lens directory holding only a README still runs', () => {
+  // init writes a README there. Treating a lens-less source as fatal would make
+  // the scaffold unusable, which is how this was found.
+  const dir = mkdtempSync(join(tmpdir(), 'crosscheck-init3-'));
+  mkdirSync(join(dir, 'src'));
+  writeFileSync(join(dir, 'src/a.js'), 'export const a = 1;\n');
+  execFileSync(process.execPath, [CLI, 'init'], { cwd: dir, encoding: 'utf8' });
+  const out = execFileSync(process.execPath,
+    [CLI, 'lenses'], { cwd: dir, encoding: 'utf8' });
+  assert.match(out, /lens\(es\) from 2 source\(s\)/);
+  assert.doesNotMatch(out, /ignoring README/, 'a README is not a failed lens');
+});
+
+test('a --comment-file body carries findings and the disclosures', () => {
+  const dir = fixture();
+  const stub = stubExec(dir, FINDING_STUB);
+  const body = join(dir, 'comment.md');
+  run(['run', join(dir, 'src'), '--exec', stub, '--comment-file', body]);
+  const text = readFileSync(body, 'utf8');
+  assert.match(text, /<!-- crosscheck:report -->/);
+  assert.match(text, /## crosscheck/);
+  assert.match(text, /Refuted in verification: \d/);
+  assert.match(text, /Run details/);
 });

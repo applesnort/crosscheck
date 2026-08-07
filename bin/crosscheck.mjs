@@ -21,6 +21,7 @@
 //                                --exec '<command>'  [--lenses dir] [--only a,b]
 //                                [--skip x,y] [--concurrency N] [--out run.json]
 //                                [--sarif f] [--baseline b] [--mixed] [--dry-run]
+//   crosscheck init              [--force]   scaffold config, lenses, workflow
 //   crosscheck lenses            [--lenses dir,dir] [--no-builtin]
 //   crosscheck report            [--in run.json] [--baseline b.json]
 //   crosscheck sarif             [--in run.json] [--baseline b.json] [--out x.sarif]
@@ -34,6 +35,7 @@
 //                            silently omitted. crosscheck cannot see tokens or
 //                            money (--exec is any command), so dispatches are
 //                            the only unit it can honestly cap.
+//          --comment-file <f>  write a pull-request summary comment
 //          --no-cache        do not read or write .crosscheck/cache
 //          --cache-dir <dir> relocate the cache
 //          --config <file>   config file (default: nearest .crosscheckrc.json,
@@ -55,7 +57,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import {
   existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync
 } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { formatScore, score } from '../lib/calibrate.mjs';
 import { findConfig, mergeConfig, validateConfig } from '../lib/config.mjs';
 import { parseFrontmatter, resolveLensSet } from '../lib/lenses.mjs';
@@ -69,6 +71,7 @@ import {
   planRun, promptsFor, resolveExec, runPanel, verifyFindings
 } from '../lib/run.mjs';
 import { cacheKey, createCache } from '../lib/cache.mjs';
+import { buildComment } from '../lib/comment.mjs';
 import { toSarifJson } from '../lib/sarif.mjs';
 import { diffCommand, targetFromDiff, withContext } from '../lib/target.mjs';
 
@@ -82,7 +85,7 @@ function fail(message) {
 // to compare against something.
 const BOOLEAN_FLAGS = new Set([
   'dry-run', 'mixed', 'no-builtin', 'staged', 'verify', 'no-verify', 'diff',
-  'no-cache'
+  'no-cache', 'force'
 ]);
 
 function parseArgs(argv) {
@@ -180,25 +183,39 @@ function lensSources(option, { includeBuiltin = true } = {}) {
   if (dirs.length === 0) {
     fail('no lens directories to load (--no-builtin with no --lenses?)');
   }
-  return dirs.map(dir => ({ origin: dir, lenses: loadLenses(dir) }));
+  const sources = dirs.map(dir => ({ origin: dir, lenses: loadLenses(dir) }));
+  if (sources.every(source => source.lenses.length === 0)) {
+    fail(`no usable lens definitions found in: ${dirs.join(', ')}`);
+  }
+  return sources;
 }
 
+// Documentation files that live alongside lenses and are not lens attempts.
+const NOT_A_LENS = /^(README|CONTRIBUTING|NOTES)\.md$/i;
+
+// Returns whatever lenses the directory holds, possibly none. A source with no
+// lenses is normal once sources layer — a project's own directory may hold only a
+// README while the packaged lenses do the work. Failing here would make an empty
+// local directory fatal; the combined set is what has to be non-empty, and
+// lensSources checks that.
 function loadLenses(dir) {
   const files = readdirSync(dir).filter(f => f.endsWith('.md'));
   const lenses = [];
   for (const file of files) {
+    if (NOT_A_LENS.test(file)) {
+      continue;
+    }
     const path = join(dir, file);
     const text = readFileSync(path, 'utf8');
     const meta = parseFrontmatter(text);
     if (!meta?.name) {
+      // Named, because a lens silently ignored for a malformed header is a
+      // coverage hole that looks like a working roster.
       process.stderr.write(
-        `crosscheck: skipping ${file} — no frontmatter with a name\n`);
+        `crosscheck: ignoring ${file} — no frontmatter with a name\n`);
       continue;
     }
     lenses.push({ ...meta, definition: text, definitionPath: path });
-  }
-  if (lenses.length === 0) {
-    fail(`no usable lens definitions in ${dir}`);
   }
   return lenses;
 }
@@ -362,7 +379,12 @@ function report({ merged, suppressed, stale, refuted = [] }) {
       const who = f.consensus
         ? `CONSENSUS ${f.consensusScore}: ${f.lenses.join(', ')}`
         : f.lenses.join(', ');
-      out.push(`- [${who}] ${f.file}:${f.line} — ${f.issue}` +
+      // More reports than lenses means nearby similar findings were collapsed;
+      // say so and give the lines, or the entry understates what was reported.
+      const collapsed = f.occurrences > f.lenses.length
+        ? ` (${f.occurrences} reports across lines ${f.lines.join(', ')})`
+        : '';
+      out.push(`- [${who}] ${f.file}:${f.line}${collapsed} — ${f.issue}` +
         (f.fix ? ` — ${f.fix}` : ''));
     }
   }
@@ -411,6 +433,145 @@ function loadConfig(explicitPath) {
     fail('fix the config file, or pass --config to point elsewhere');
   }
   return { config, path };
+}
+
+const INIT_CONFIG = `{
+  "// exec": "any command that takes a lens prompt on stdin and returns findings",
+  "exec": "claude -p",
+  "concurrency": 2,
+  "// context": "lines of surrounding code given to a lens around each change",
+  "context": 20
+}
+`;
+
+const INIT_LENS_README = `# Project lenses
+
+Markdown files here are added to the packaged lenses. A file whose \`name\`
+matches a packaged lens overrides it, and the override is printed on every run.
+
+Run \`crosscheck lenses\` to see what resolved and where each lens came from.
+
+A lens needs five frontmatter keys and a body:
+
+    ---
+    name: house-rules
+    summary: conventions this team actually enforces
+    when: [**/*.{js,mjs}]
+    owns: violations of our written conventions
+    not-owns: correctness, security, architecture, usability
+    ---
+
+    # Lens: house-rules
+
+    ...what to look for...
+
+    Findings only, one per line: \`file:line — SEVERITY — issue — fix\`.
+    SEVERITY is BLOCK, FIX, or CONSIDER. Reply exactly \`NO FINDINGS\` if none.
+
+Nothing in this directory is published or uploaded by crosscheck. It is read off
+disk at dispatch and goes nowhere else, so a lens here can encode conventions,
+domain detail, or house rules that would make no sense upstream.
+`;
+
+const INIT_WORKFLOW = `name: crosscheck
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  # Required to upload SARIF to code scanning.
+  security-events: write
+  # Required to post the summary comment.
+  pull-requests: write
+
+concurrency:
+  group: crosscheck-\${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # crosscheck reviews a diff, so it needs the base commit too.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+
+      - name: Review the change
+        env:
+          # Provide whatever your --exec command needs. crosscheck itself never
+          # talks to a model.
+          ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          npx @applesnort/crosscheck run \\
+            --since origin/\${{ github.base_ref }} \\
+            --sarif crosscheck.sarif \\
+            --comment-file comment.md
+
+      - name: Upload SARIF
+        if: always() && hashFiles('crosscheck.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: crosscheck.sarif
+
+      - name: Post or update the summary comment
+        if: always() && hashFiles('comment.md') != ''
+        env:
+          GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Edit our previous comment rather than stacking a new one.
+          id=$(gh api "repos/\${{ github.repository }}/issues/\${{ github.event.number }}/comments" \\
+                 --jq '[.[] | select(.body | contains("<!-- crosscheck:report -->"))] | last | .id // empty')
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/\${{ github.repository }}/issues/comments/$id" \\
+              -F body=@comment.md
+          else
+            gh api --method POST "repos/\${{ github.repository }}/issues/\${{ github.event.number }}/comments" \\
+              -F body=@comment.md
+          fi
+`;
+
+// Scaffold, without overwriting anything. A tool that silently replaces a config
+// someone tuned is worse than one that refuses.
+function initCommand(options) {
+  const force = Boolean(options.force);
+  const targets = [
+    { path: '.crosscheckrc.json', content: INIT_CONFIG },
+    { path: '.crosscheck/lenses/README.md', content: INIT_LENS_README },
+    { path: '.github/workflows/crosscheck.yml', content: INIT_WORKFLOW }
+  ];
+  const written = [];
+  const kept = [];
+  for (const { path, content } of targets) {
+    const full = resolve(path);
+    if (existsSync(full) && !force) {
+      kept.push(path);
+      continue;
+    }
+    mkdirSync(dirname(full), { recursive: true });
+    writeFileSync(full, content);
+    written.push(path);
+  }
+  const out = [];
+  if (written.length) {
+    out.push('Created:', ...written.map(p => `  ${p}`));
+  }
+  if (kept.length) {
+    out.push('Left alone (already present; --force overwrites):',
+      ...kept.map(p => `  ${p}`));
+  }
+  out.push('',
+    'Next: set "exec" in .crosscheckrc.json to the command that runs your model,',
+    'then try a dry run:',
+    '',
+    '  crosscheck run --diff --dry-run',
+    '');
+  process.stdout.write(out.join('\n'));
 }
 
 async function runCommand(cliOptions, positional) {
@@ -609,6 +770,21 @@ async function runCommand(cliOptions, positional) {
 
   process.stdout.write(report({ merged, suppressed, stale, refuted }));
 
+  if (options['comment-file']) {
+    writeFileSync(options['comment-file'], buildComment({
+      merged,
+      refuted,
+      suppressed,
+      dropped,
+      skipped,
+      target: diffMode
+        ? `${files.length} changed file(s)`
+        : `${files.length} file(s)`,
+      sarifPath: options.sarif ?? null
+    }));
+    process.stderr.write(`crosscheck: wrote ${options['comment-file']}\n`);
+  }
+
   if (options.sarif) {
     writeFileSync(options.sarif, toSarifJson(merged, {
       lensMeta: Object.fromEntries(lenses.map(l => [l.name, l])),
@@ -636,6 +812,11 @@ async function main() {
 
   if (command === 'run') {
     await runCommand(options, positional);
+    return;
+  }
+
+  if (command === 'init') {
+    initCommand(options);
     return;
   }
 
