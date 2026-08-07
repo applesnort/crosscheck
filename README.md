@@ -19,7 +19,7 @@ or your own wrapper. crosscheck owns prompt construction, routing, fan-out, dedu
 and output; you own the model. `--dry-run` prints the roster and prompts without
 spawning anything.
 
-No dependencies, no install step, 218 tests.
+No dependencies, no install step, 247 tests.
 
 ## Configuration
 
@@ -50,7 +50,9 @@ and an unrecognised key is an error rather than a silent no-op, because a
 misspelled `exec` that quietly does nothing is worse than a crash.
 
 Accepted keys: `exec`, `lenses`, `concurrency`, `only`, `skip`, `mixed`, `out`,
-`sarif`, `baseline`, `overlap`, `preflight`, `context`, `verify`, `since`. Keys beginning `//` are treated as comments.
+`sarif`, `baseline`, `overlap`, `preflight`, `context`, `verify`, `since`,
+`max-dispatches`, `no-cache`, `cache-dir`. `exec` accepts a string or a per-lens
+map. Keys beginning `//` are treated as comments.
 
 > **v0.x — the API is unstable.** The CLI commands and the `lib/` exports may
 > change shape before 1.0. Pin an exact version if you depend on it.
@@ -114,6 +116,44 @@ and the failure is reported.
 A non-zero exit aborts before a single model call. That lets a project enforce a
 rule crosscheck knows nothing about — data classification, branch policy, a clean
 worktree — without the rule having to exist upstream.
+
+## Cost control
+
+A tool that costs real money per run gets switched off, and a switched-off tool
+finds nothing.
+
+**A cheap lens should not pay for an expensive model.** `exec` may be a map:
+
+```json
+{
+  "exec": {
+    "default": "claude -p",
+    "conventions": "llm -m claude-haiku-4-5"
+  }
+}
+```
+
+Precedence is the lens's own `exec` in its frontmatter, then the map entry, then
+`default`. A rostered lens with no command anywhere fails loudly and names itself
+— it is never quietly skipped.
+
+**Unchanged files are not re-reviewed.** Results are cached under
+`.crosscheck/cache`, keyed on the lens definition, the files, and their contents.
+The definition is part of the key deliberately: editing a lens must invalidate its
+results, or you would be served answers from the previous prompt with no way to
+tell. `--no-cache` disables it, `--cache-dir` relocates it. A failed lens is never
+cached, so it is retried rather than permanently wrong.
+
+**`--max-dispatches N` caps the run, and says what it dropped:**
+
+```
+crosscheck: BUDGET REACHED — 3 lens(es) not run: check, security-check, taint
+```
+
+The unit is dispatches, not dollars. crosscheck cannot see tokens or cost —
+`--exec` is an arbitrary command — so a monetary budget would be a number invented
+from nothing. Truncation is always named, because a run that quietly stopped early
+looks exactly like a run that found nothing.
 
 ## SARIF output
 
@@ -257,6 +297,7 @@ lib/
   run.mjs               roster planning and bounded fan-out
   config.mjs            .crosscheckrc.json discovery and validation
   target.mjs            diff parsing, changed line ranges
+  cache.mjs             content-addressed result cache
 bin/crosscheck.mjs      CLI: run | lenses | report | sarif | baseline |
                              overlap | calibrate
 fixtures/calibration/   planted defects, ground truth, and the calibration record

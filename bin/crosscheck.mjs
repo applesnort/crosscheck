@@ -30,6 +30,12 @@
 //
 // Options: --overlap <file>  independence data from `overlap` (report/sarif)
 //          --lenses <dir>    lens directory (routing + SARIF rule metadata)
+//          --max-dispatches N  cap lens runs; dropped lenses are named, never
+//                            silently omitted. crosscheck cannot see tokens or
+//                            money (--exec is any command), so dispatches are
+//                            the only unit it can honestly cap.
+//          --no-cache        do not read or write .crosscheck/cache
+//          --cache-dir <dir> relocate the cache
 //          --config <file>   config file (default: nearest .crosscheckrc.json,
 //                            searching upward and stopping at a repo root)
 //
@@ -47,7 +53,7 @@
 
 import { spawn, spawnSync } from 'node:child_process';
 import {
-  existsSync, readFileSync, readdirSync, statSync, writeFileSync
+  existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync
 } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { formatScore, score } from '../lib/calibrate.mjs';
@@ -59,7 +65,10 @@ import {
 import { filterAgainstBaseline, staleBaselineEntries, toBaseline }
   from '../lib/baseline.mjs';
 import { parseReports } from '../lib/parse.mjs';
-import { planRun, promptsFor, runPanel, verifyFindings } from '../lib/run.mjs';
+import {
+  planRun, promptsFor, resolveExec, runPanel, verifyFindings
+} from '../lib/run.mjs';
+import { cacheKey, createCache } from '../lib/cache.mjs';
 import { toSarifJson } from '../lib/sarif.mjs';
 import { diffCommand, targetFromDiff, withContext } from '../lib/target.mjs';
 
@@ -72,7 +81,8 @@ function fail(message) {
 // otherwise be ambiguous about whether src/ is a ref or a path. Use --since <ref>
 // to compare against something.
 const BOOLEAN_FLAGS = new Set([
-  'dry-run', 'mixed', 'no-builtin', 'staged', 'verify', 'no-verify', 'diff'
+  'dry-run', 'mixed', 'no-builtin', 'staged', 'verify', 'no-verify', 'diff',
+  'no-cache'
 ]);
 
 function parseArgs(argv) {
@@ -256,6 +266,34 @@ function runPreflight(commandLine) {
     process.stderr.write(String(result.stderr ?? ''));
     fail(`preflight failed (exit ${result.status}); nothing was dispatched`);
   }
+}
+
+// A disk-backed cache under .crosscheck/cache. Disabled entirely by --no-cache,
+// in which case nothing is read or written.
+function buildCache(options) {
+  if (options['no-cache']) {
+    return createCache();
+  }
+  const dir = resolve(options['cache-dir'] ?? '.crosscheck/cache');
+  return createCache({
+    read: key => {
+      const path = join(dir, `${key}.json`);
+      if (!existsSync(path)) {
+        return null;
+      }
+      try {
+        return JSON.parse(readFileSync(path, 'utf8'));
+      } catch {
+        // A corrupt entry is a miss, not a crash: the run should proceed and
+        // simply pay for that lens again.
+        return null;
+      }
+    },
+    write: (key, entry) => {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, `${key}.json`), JSON.stringify(entry, null, 2));
+    }
+  });
 }
 
 function execCommand(commandLine) {
@@ -460,16 +498,56 @@ async function runCommand(cliOptions, positional) {
     return;
   }
 
-  const { reports, failures } = await runPanel({
+  // Each lens may run under its own command, so dispatch resolves per lens
+  // rather than sharing one executor.
+  const byLens = new Map(roster.map(l => [l.name, l]));
+  const dispatch = async ({ prompt, lens, files }) => {
+    const commandLine = resolveExec(byLens.get(lens), options.exec);
+    if (!commandLine) {
+      throw new Error(
+        `no exec for lens "${lens}" — set exec, or an exec map entry for it`);
+    }
+    return execCommand(commandLine)({ prompt, lens, files });
+  };
+
+  const cache = buildCache(options);
+  const { reports, failures, dropped, cacheStats } = await runPanel({
     roster,
     skipped,
-    exec: execCommand(options.exec),
+    exec: dispatch,
     concurrency: Number(options.concurrency ?? 4),
     promptOptions,
+    cache: cache.enabled ? cache : null,
+    cacheKeyFor: cache.enabled
+      ? job => cacheKey({
+        lens: job.lens,
+        definition: byLens.get(job.lens)?.definition,
+        files: job.files.map(path => ({
+          path,
+          content: existsSync(path) ? readFileSync(path, 'utf8') : ''
+        })),
+        promptOptions
+      })
+      : null,
+    maxDispatches: options['max-dispatches'] == null
+      ? null : Number(options['max-dispatches']),
     onLensStart: lens => process.stderr.write(`  → ${lens}\n`),
     onLensDone: (lens, r) => process.stderr.write(
-      r.ok ? `  ✓ ${lens} (${r.findings} finding(s))\n` : `  ✗ ${lens} did not complete\n`)
+      r.ok
+        ? `  ✓ ${lens} (${r.findings} finding(s))${r.cached ? ' [cached]' : ''}\n`
+        : `  ✗ ${lens} did not complete\n`)
   });
+
+  // Both of these are coverage holes, and this tool states its holes.
+  if (dropped.length) {
+    process.stderr.write(
+      `crosscheck: BUDGET REACHED — ${dropped.length} lens(es) not run: ` +
+      `${dropped.map(d => d.lens).join(', ')}\n`);
+  }
+  if (cacheStats?.hits) {
+    process.stderr.write(
+      `crosscheck: ${cacheStats.hits} lens(es) served from cache\n`);
+  }
 
   for (const f of failures) {
     process.stderr.write(`crosscheck: ${f.lens} failed — ${f.reason}\n`);

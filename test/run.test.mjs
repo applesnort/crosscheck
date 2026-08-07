@@ -9,7 +9,10 @@ import {
   CONTRACT_LINE, buildLensPrompt, buildRefutePrompt, parseVerdict,
   stripFrontmatter
 } from '../lib/prompt.mjs';
-import { DEFAULT_CONCURRENCY, planRun, promptsFor, runPanel } from '../lib/run.mjs';
+import {
+  DEFAULT_CONCURRENCY, planBudget, planRun, promptsFor, resolveExec, runPanel
+} from '../lib/run.mjs';
+import { createCache } from '../lib/cache.mjs';
 import { mergeFindings } from '../lib/merge.mjs';
 
 const LENSES = [
@@ -323,4 +326,111 @@ test('an unusable verdict counts as refuted, matching the stated default', () =>
     assert.equal(v.refuted, true, JSON.stringify(text));
   }
   assert.match(parseVerdict('').reason, /no usable verdict/);
+});
+
+// --- per-lens exec ---
+
+test('a lens can declare its own exec command', () => {
+  assert.equal(resolveExec({ name: 'check', exec: 'cheap-model' }, 'default-model'),
+    'cheap-model');
+});
+
+test('an exec map selects per lens, with a default fallback', () => {
+  const map = { default: 'big', check: 'small' };
+  assert.equal(resolveExec({ name: 'check' }, map), 'small');
+  assert.equal(resolveExec({ name: 'taint' }, map), 'big');
+});
+
+test('a lens exec beats both the map and the default', () => {
+  assert.equal(
+    resolveExec({ name: 'check', exec: 'own' }, { check: 'mapped' }), 'own');
+});
+
+test('a plain string exec applies to every lens', () => {
+  assert.equal(resolveExec({ name: 'anything' }, 'one-model'), 'one-model');
+});
+
+test('no exec anywhere resolves to null rather than a silent default', () => {
+  assert.equal(resolveExec({ name: 'check' }, undefined), null);
+  assert.equal(resolveExec({ name: 'check' }, { other: 'x' }), null);
+});
+
+// --- budget ---
+
+test('a budget under the job count drops the remainder, and names them', () => {
+  const jobs = [{ lens: 'a' }, { lens: 'b' }, { lens: 'c' }];
+  const { run, dropped } = planBudget(jobs, 2);
+  assert.deepEqual(run.map(j => j.lens), ['a', 'b']);
+  assert.deepEqual(dropped.map(j => j.lens), ['c']);
+});
+
+test('a budget at or above the job count drops nothing', () => {
+  const jobs = [{ lens: 'a' }, { lens: 'b' }];
+  assert.deepEqual(planBudget(jobs, 2).dropped, []);
+  assert.deepEqual(planBudget(jobs, 99).dropped, []);
+  assert.deepEqual(planBudget(jobs, null).dropped, []);
+});
+
+test('a zero budget runs nothing and says so', () => {
+  const jobs = [{ lens: 'a' }];
+  const { run, dropped } = planBudget(jobs, 0);
+  assert.deepEqual(run, []);
+  assert.equal(dropped.length, 1);
+});
+
+test('dropped lenses are reported by runPanel, never silently omitted', async () => {
+  const many = Array.from({ length: 4 }, (_, i) => ({
+    name: `l${i}`, when: ['**/*.js'], owns: 'o', 'not-owns': 'n', definition: 'd'
+  }));
+  const { roster } = planRun(many, ['a.js']);
+  const result = await runPanel({
+    roster, maxDispatches: 2, exec: okExec('NO FINDINGS')
+  });
+  assert.equal(result.reports.length, 2);
+  assert.equal(result.dropped.length, 2);
+  assert.ok(result.dropped.every(d => d.lens && typeof d.files === 'number'));
+});
+
+// --- caching ---
+
+test('a cache hit skips the executor entirely', async () => {
+  const { roster } = planRun(LENSES, ['lib/a.js']);
+  const store = new Map();
+  const cache = createCache({
+    read: k => store.get(k) ?? null, write: (k, e) => store.set(k, e)
+  });
+  const keyFor = () => 'fixed-key';
+  let calls = 0;
+  const counting = async () => {
+    calls += 1;
+    return { stdout: 'lib/a.js:4 — BLOCK — boom — fix', code: 0 };
+  };
+  const first = await runPanel({ roster, exec: counting, cache, cacheKeyFor: keyFor });
+  const second = await runPanel({ roster, exec: counting, cache, cacheKeyFor: keyFor });
+  assert.equal(calls, 1, 'the second run must not dispatch');
+  assert.equal(second.reports[0].findings.length, 1);
+  assert.equal(first.cacheStats.writes, 1);
+  assert.equal(second.cacheStats.hits, 1);
+});
+
+test('a failed lens is not cached, so it is retried next run', async () => {
+  const { roster } = planRun(LENSES, ['lib/a.js']);
+  const store = new Map();
+  const cache = createCache({
+    read: k => store.get(k) ?? null, write: (k, e) => store.set(k, e)
+  });
+  await runPanel({
+    roster, exec: async () => ({ stdout: '', code: 1 }),
+    cache, cacheKeyFor: () => 'k'
+  });
+  assert.equal(store.size, 0, 'caching a failure would make it permanent');
+});
+
+test('with no cache configured everything dispatches as before', async () => {
+  const { roster } = planRun(LENSES, ['lib/a.js']);
+  let calls = 0;
+  const counting = async () => { calls += 1; return { stdout: 'NO FINDINGS', code: 0 }; };
+  await runPanel({ roster, exec: counting });
+  await runPanel({ roster, exec: counting });
+  assert.equal(calls, 2);
 });
