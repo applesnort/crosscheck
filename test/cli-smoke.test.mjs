@@ -272,3 +272,19 @@ test('the same lens directory named twice does not shadow itself', () => {
   assert.equal((out.match(/^\s+house\s/gm) ?? []).length, 1,
     'the lens appears once');
 });
+
+test('the scaffolded workflow installs the model CLI it depends on', () => {
+  // crosscheck never talks to a model, so the exec command must exist on the
+  // runner. A workflow that sets an API key but never installs the CLI fails
+  // every lens with ENOENT — which is what it did.
+  const dir = mkdtempSync(join(tmpdir(), 'crosscheck-wf-'));
+  execFileSync(process.execPath, [CLI, 'init'], { cwd: dir, encoding: 'utf8' });
+  const wf = readFileSync(join(dir, '.github/workflows/crosscheck.yml'), 'utf8');
+  assert.match(wf, /Install the model CLI/);
+  assert.match(wf, /npm i -g @anthropic-ai\/claude-code/);
+  assert.match(wf, /EDIT THIS STEP/, 'the choice must be visibly the user\'s');
+  // Every permission the workflow's steps actually use must be declared.
+  assert.match(wf, /security-events: write/, 'SARIF upload');
+  assert.match(wf, /pull-requests: write/, 'the summary comment');
+  assert.match(wf, /contents: read/, 'checkout');
+});

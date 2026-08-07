@@ -511,10 +511,20 @@ jobs:
         with:
           node-version: '22.x'
 
+      # EDIT THIS STEP. crosscheck never talks to a model, so whatever your
+      # \`exec\` command names has to exist on the runner. Nothing here is
+      # installed for you, and a missing command fails every lens with ENOENT.
+      #
+      #   Claude Code:  npm i -g @anthropic-ai/claude-code   (exec: claude -p)
+      #   llm:          pipx install llm                     (exec: llm -m ...)
+      #   your own:     whatever installs it
+      - name: Install the model CLI
+        run: npm i -g @anthropic-ai/claude-code
+
       - name: Review the change
         env:
-          # Provide whatever your --exec command needs. crosscheck itself never
-          # talks to a model.
+          # Whatever your exec command needs to authenticate. crosscheck reads no
+          # credentials of its own.
           ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           npx @applesnort/crosscheck run \\
