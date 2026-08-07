@@ -183,9 +183,18 @@ function lensSources(option, { includeBuiltin = true } = {}) {
   if (dirs.length === 0) {
     fail('no lens directories to load (--no-builtin with no --lenses?)');
   }
-  const sources = dirs.map(dir => ({ origin: dir, lenses: loadLenses(dir) }));
+  // The same directory can arrive twice — ./lenses is auto-detected, and running
+  // from that project also names it via --lenses. Loading it twice makes every
+  // lens in it shadow itself, which reads as a configuration mistake that is not
+  // one. Keep the last occurrence, so an explicit --lenses still wins on order.
+  const seen = new Map();
+  for (const dir of dirs) {
+    seen.set(dir, true);
+  }
+  const uniqueDirs = [...seen.keys()];
+  const sources = uniqueDirs.map(dir => ({ origin: dir, lenses: loadLenses(dir) }));
   if (sources.every(source => source.lenses.length === 0)) {
-    fail(`no usable lens definitions found in: ${dirs.join(', ')}`);
+    fail(`no usable lens definitions found in: ${uniqueDirs.join(', ')}`);
   }
   return sources;
 }

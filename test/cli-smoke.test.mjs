@@ -252,3 +252,23 @@ test('a --comment-file body carries findings and the disclosures', () => {
   assert.match(text, /Refuted in verification: \d/);
   assert.match(text, /Run details/);
 });
+
+test('the same lens directory named twice does not shadow itself', () => {
+  // ./lenses is auto-detected, and running from that project also names it via
+  // --lenses. Loading it twice made every lens shadow itself, which reads as a
+  // configuration error that is not one.
+  const dir = mkdtempSync(join(tmpdir(), 'crosscheck-dedupe-'));
+  mkdirSync(join(dir, 'lenses'));
+  writeFileSync(join(dir, 'lenses/house.md'), [
+    '---', 'name: house', 'summary: s', 'when: [**/*.js]',
+    'owns: o', 'not-owns: n', '---', '', '# Lens: house', '',
+    'Findings only: file:line — SEVERITY — issue — fix. BLOCK, FIX, CONSIDER.',
+    'Reply NO FINDINGS if none.'
+  ].join('\n'));
+  const out = execFileSync(process.execPath,
+    [CLI, 'lenses', '--lenses', 'lenses'], { cwd: dir, encoding: 'utf8' });
+  assert.doesNotMatch(out, /override: "house"/,
+    'one directory cannot override itself');
+  assert.equal((out.match(/^\s+house\s/gm) ?? []).length, 1,
+    'the lens appears once');
+});
