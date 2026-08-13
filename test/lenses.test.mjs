@@ -230,6 +230,22 @@ test('every shipped lens routes to an ordinary source file', () => {
     `only ${routable.length} lens(es) match a plain .js file — check the globs`);
 });
 
+test('the code lenses route to a single-file component', () => {
+  // A .vue/.svelte file is mostly JavaScript and routinely holds the largest
+  // component in a project. Only `ux` used to glob these, so a 2000-line
+  // component was reviewed for usability and by nothing else -- reported as a
+  // complete run, because every lens that skipped it "matched nothing in
+  // scope".
+  const meta = name => parseFrontmatter(
+    readFileSync(join(LENS_DIR, `${name}.md`), 'utf8'));
+  for (const component of ['app/Cockpit.vue', 'app/Panel.svelte']) {
+    for (const name of ['check', 'architect', 'security-check', 'taint']) {
+      assert.ok(matchesAny(component, meta(name).when),
+        `${name} does not route ${component} — its logic goes unreviewed`);
+    }
+  }
+});
+
 // --- layered lens sources ---
 
 import { resolveLensSet } from '../lib/lenses.mjs';
