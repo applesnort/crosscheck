@@ -149,3 +149,20 @@ test('serializes to parseable JSON with a trailing newline', () => {
   assert.ok(json.endsWith('\n'));
   assert.equal(JSON.parse(json).version, '2.1.0');
 });
+
+// Windows. A SARIF artifactLocation is a URI reference, so a backslash path is
+// not merely ugly — GitHub code scanning will not map it back to a file.
+test('artifact locations are URI paths even when the finding used backslashes', () => {
+  const sarif = toSarif({
+    findings: [{
+      file: 'src\\lib\\a.js', line: 4, severity: 'BLOCK', issue: 'i', fix: null,
+      lenses: ['check'], consensus: false, consensusScore: 0, occurrences: 1,
+      lines: [4], key: 'k'
+    }],
+    incomplete: [], unparsed: []
+  });
+  assert.equal(
+    sarif.runs[0].results[0].locations[0].physicalLocation
+      .artifactLocation.uri,
+    'src/lib/a.js');
+});

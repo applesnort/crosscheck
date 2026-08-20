@@ -13,9 +13,10 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseExpectedResults, sampleCases } from '../lib/corpus.mjs';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const CORPUS = join(ROOT, 'corpus/owasp-benchmark');
 const LABELS = join(CORPUS, 'expectedresults-1.2.csv');
 const OUT = join(ROOT, 'fixtures/corpus-sample.json');

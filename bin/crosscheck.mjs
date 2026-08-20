@@ -57,7 +57,8 @@ import { spawn, spawnSync } from 'node:child_process';
 import {
   existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync
 } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { formatScore, score } from '../lib/calibrate.mjs';
 import { findConfig, mergeConfig, validateConfig } from '../lib/config.mjs';
 import { parseFrontmatter, resolveLensSet } from '../lib/lenses.mjs';
@@ -153,7 +154,11 @@ function loadLensMeta(dir) {
   return meta;
 }
 
-const BUILTIN_LENS_DIR = new URL('../lenses/', import.meta.url).pathname;
+// fileURLToPath, not `.pathname`: a URL path is not a filesystem path. It keeps
+// percent-escapes, so any install directory containing a space resolves to
+// nothing, and on Windows it carries a leading slash before the drive letter.
+const BUILTIN_LENS_DIR = resolve(
+  fileURLToPath(new URL('../lenses/', import.meta.url)));
 
 // Lens sources, in increasing precedence: the packaged lenses, then ./lenses or
 // .crosscheck/lenses if present, then anything named by --lenses. Layering
@@ -229,6 +234,13 @@ function loadLenses(dir) {
   return lenses;
 }
 
+// Report one separator whatever the platform uses. git diff already speaks `/`,
+// so without this a path-mode run on Windows routed, cached, and reported
+// differently from the same run under --diff. Split on the platform separator
+// rather than replacing every backslash: on POSIX a backslash is a legal
+// character in a filename, and rewriting it would corrupt a real path.
+const toPosix = path => sep === '/' ? path : path.split(sep).join('/');
+
 // Expand the positional targets into a concrete file list. Directories are walked;
 // everything is reported relative to cwd so paths in findings match what the user
 // typed.
@@ -249,7 +261,7 @@ function collectFiles(targets) {
     // ../../../ chain is harder to read than the full path, and the model has
     // to resolve whatever we print.
     const rel = relative(process.cwd(), path);
-    out.push(!rel || rel.startsWith('..') ? path : rel);
+    out.push(toPosix(!rel || rel.startsWith('..') ? path : rel));
   };
   for (const target of targets) {
     if (!existsSync(target)) {

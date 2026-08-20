@@ -38,6 +38,11 @@ Set `exec` to whatever runs your model, then:
 crosscheck run --diff --dry-run
 ```
 
+Node 20 or newer, on Linux, macOS or Windows. On Windows, prefer setting `exec`
+in `.crosscheckrc.json` rather than passing it on the command line: `--exec` is
+handed to the shell, and `cmd.exe` does not treat single quotes as quoting, so
+the POSIX spelling `--exec 'claude -p'` arrives with the quotes still attached.
+
 ## In CI
 
 The scaffolded workflow reviews the diff against the base branch, and does two

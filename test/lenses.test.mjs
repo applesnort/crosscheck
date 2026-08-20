@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   applyOverrides,
   globToRegExp,
@@ -16,7 +17,7 @@ import {
   validateLens
 } from '../lib/lenses.mjs';
 
-const LENS_DIR = new URL('../lenses/', import.meta.url).pathname;
+const LENS_DIR = fileURLToPath(new URL('../lenses/', import.meta.url));
 
 test('parses the frontmatter subset the lenses use', () => {
   const meta = parseFrontmatter([
@@ -301,4 +302,48 @@ test('a nameless lens is skipped rather than crashing the set', () => {
 test('no sources resolves to an empty set', () => {
   assert.deepEqual(resolveLensSet([]).lenses, []);
   assert.deepEqual(resolveLensSet(undefined).lenses, []);
+});
+
+// Windows. `collectFiles` reports paths with the platform separator, so on
+// Windows a lens saw `src\components\Btn.jsx`. Extension globs matched anyway —
+// `[^/]*` happily eats a backslash — so the roster filled and no UNREVIEWED
+// warning fired, but every directory-anchored glob silently stopped matching.
+// Coverage narrowed and the run still looked complete.
+test('directory globs match a path that uses Windows separators', () => {
+  assert.equal(matchesAny('src\\components\\Btn.jsx', ['**/components/**']), true);
+  assert.equal(matchesAny('db\\migrations\\001.sql', ['**/migrations/**']), true);
+  assert.equal(matchesAny('a\\b\\c\\deep.js', ['a/**/*.js']), true);
+});
+
+test('a Windows path still fails a glob it genuinely does not match', () => {
+  assert.equal(matchesAny('src\\views\\Btn.jsx', ['**/components/**']), false);
+  assert.equal(matchesAny('src\\app.css', ['**/*.js']), false);
+});
+
+// The whole point of the separator fix, asserted against the shipped lenses
+// rather than a hand-written glob: the same tree must produce the same roster
+// whichever separator the platform reports it with.
+test('a Windows tree routes to the same roster as a POSIX one', () => {
+  const posix = [
+    'src/app.js', 'src/components/Btn.jsx', 'db/migrations/001.sql',
+    'src/views/Page.vue', 'src/pages/Home.tsx',
+    // Reaches ux only via `**/components/**` — no extension glob claims it. If
+    // the separator fix regresses, this is the file that stops being reviewed.
+    'src/components/panel.css'
+  ];
+  const windows = posix.map(f => f.replace(/\//g, '\\'));
+  const shipped = readdirSync(LENS_DIR)
+    .filter(f => f.endsWith('.md') && f !== 'README.md')
+    .map(f => parseFrontmatter(
+      readFileSync(join(LENS_DIR, f), 'utf8')));
+  assert.ok(shipped.length >= 5, 'the shipped lenses were found');
+
+  const rosterFor = files => routeRoster(shipped, files).roster
+    .map(l => `${l.name}:${l.files.length}`).sort();
+  assert.deepEqual(rosterFor(windows), rosterFor(posix));
+  // Not a vacuous pass: the directory-anchored globs must actually contribute.
+  assert.ok(rosterFor(posix).includes('ux:4'),
+    'ux routes components/, views/ and pages/ on top of its extensions');
+  assert.equal(matchesAny('src\\components\\panel.css', ['**/*.{jsx,tsx,vue,svelte,html}']),
+    false, 'the .css file is claimed by the directory glob alone');
 });
