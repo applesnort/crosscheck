@@ -12,14 +12,17 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import {
-  chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync
+  cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const CLI = new URL('../bin/crosscheck.mjs', import.meta.url).pathname;
+// fileURLToPath, not `.pathname`: the latter is a URL path, which keeps
+// percent-escapes and prefixes a Windows drive letter with a slash.
+const CLI = fileURLToPath(new URL('../bin/crosscheck.mjs', import.meta.url));
 
 function fixture() {
   const dir = mkdtempSync(join(tmpdir(), 'crosscheck-smoke-'));
@@ -31,35 +34,42 @@ function fixture() {
   return dir;
 }
 
-// A stand-in model: reads a prompt on stdin, reports on the first file listed.
+let stubCount = 0;
+
+// A stand-in model. Written as a Node script rather than a shell one so the
+// suite runs on Windows, where there is no /bin/sh and the execute bit chmod
+// used to set does not exist. Returns the command line, since --exec takes one.
 function stubExec(dir, body) {
-  const path = join(dir, 'stub.sh');
+  const path = join(dir, `stub-${stubCount++}.mjs`);
   writeFileSync(path, body);
-  chmodSync(path, 0o755);
-  return path;
+  // Both quoted: either may sit under a path containing a space. Node runs a
+  // Windows shell command as `cmd /d /s /c "<line>"`, which leaves inner quotes
+  // alone, and /bin/sh reads them the same way.
+  return `"${process.execPath}" "${path}"`;
 }
 
-// Answers as a lens, and as the verifier when handed a refute prompt. The
-// verification pass is on by default, so a stub that only knows how to report
-// findings would see every one of them refuted.
-const FINDING_STUB = `#!/bin/sh
-p=$(cat)
-case "$p" in
-  *"REFUTE it"*) printf 'CONFIRMED — the trigger is reachable\\n'; exit 0 ;;
-esac
-f=$(printf '%s' "$p" | grep -oE '  - [^ ]+' | head -1 | sed 's/  - //')
-printf '%s:1 — BLOCK — a stubbed defect — none needed\\n' "$f"
+// Reads the prompt on stdin and reports on the first file the prompt lists.
+// `verdict` also answers as the verifier: the verification pass is on by
+// default, so a stub that only knew how to report findings would see every one
+// of them refuted.
+const modelStub = verdict => `
+let prompt = '';
+process.stdin.setEncoding('utf8');
+for await (const chunk of process.stdin) {
+  prompt += chunk;
+}
+if (prompt.includes('REFUTE it')) {
+  process.stdout.write('${verdict}\\n');
+  process.exit(0);
+}
+const file = /^  - (\\S+)/m.exec(prompt)?.[1];
+process.stdout.write(\`\${file}:1 — BLOCK — a stubbed defect — none needed\\n\`);
 `;
 
+const FINDING_STUB = modelStub('CONFIRMED — the trigger is reachable');
+
 // A verifier that refutes everything, to prove findings are actually dropped.
-const REFUTING_STUB = `#!/bin/sh
-p=$(cat)
-case "$p" in
-  *"REFUTE it"*) printf 'REFUTED — the caller validates first\\n'; exit 0 ;;
-esac
-f=$(printf '%s' "$p" | grep -oE '  - [^ ]+' | head -1 | sed 's/  - //')
-printf '%s:1 — BLOCK — a stubbed defect — none needed\\n' "$f"
-`;
+const REFUTING_STUB = modelStub('REFUTED — the caller validates first');
 
 function run(args, options = {}) {
   return execFileSync(process.execPath, [CLI, ...args], {
@@ -86,6 +96,8 @@ test('dry-run routes real lenses over a real directory', () => {
     'the shipped lenses must actually route to a plain .js/.jsx file');
   assert.doesNotMatch(stdout, /^when: \[/m,
     'frontmatter must not reach the model');
+  // Separator-sensitive on purpose: a Windows run used to list `src\\app.js`,
+  // which routed and reported differently from the same file under --diff.
   assert.ok(stdout.includes('src/app.js'), 'the target file is listed');
   assert.equal(typeof stderr, 'string');
 });
@@ -122,22 +134,20 @@ test('SARIF written by the CLI is valid and carries lens metadata', () => {
 
 test('a file no lens reads is announced, not dropped', () => {
   const dir = fixture();
-  let combined = '';
-  try {
-    combined = execFileSync(
-      `${JSON.stringify(process.execPath)} ${JSON.stringify(CLI)} run ` +
-      `${JSON.stringify(join(dir, 'src'))} --dry-run --only check 2>&1`,
-      { encoding: 'utf8', shell: true });
-  } catch (e) {
-    combined = String(e.stdout ?? '');
-  }
+  // Both streams captured directly rather than merged by a shell redirect:
+  // JSON.stringify doubles the backslashes in a Windows path, and cmd.exe is
+  // not obliged to make sense of that.
+  const result = spawnSync(process.execPath,
+    [CLI, 'run', join(dir, 'src'), '--dry-run', '--only', 'check'],
+    { encoding: 'utf8' });
+  const combined = `${result.stdout ?? ''}${result.stderr ?? ''}`;
   assert.match(combined, /UNREVIEWED/);
   assert.match(combined, /styles\.css/);
 });
 
 test('a failing exec is surfaced and exits non-zero', () => {
   const dir = fixture();
-  const stub = stubExec(dir, '#!/bin/sh\nexit 7\n');
+  const stub = stubExec(dir, 'process.exit(7);\n');
   assert.throws(
     () => run(['run', join(dir, 'src'), '--exec', stub]),
     err => {
@@ -287,4 +297,42 @@ test('the scaffolded workflow installs the model CLI it depends on', () => {
   assert.match(wf, /security-events: write/, 'SARIF upload');
   assert.match(wf, /pull-requests: write/, 'the summary comment');
   assert.match(wf, /contents: read/, 'checkout');
+});
+
+// The packaged lens directory was resolved with `new URL(...).pathname`, which
+// is not a filesystem path: it keeps percent-escapes, and on Windows it carries
+// a leading slash before the drive letter (`/C:/...`). Every command that loads
+// the built-in lenses died on an uncaught ENOENT. Windows was the platform it
+// made unusable, but any install path containing a space failed the same way.
+test('the built-in lenses load from an install path containing a space', () => {
+  const parent = mkdtempSync(join(tmpdir(), 'crosscheck-space-'));
+  const home = join(parent, 'my source');
+  mkdirSync(home);
+  for (const part of ['bin', 'lib', 'lenses']) {
+    cpSync(new URL(`../${part}`, import.meta.url), join(home, part),
+      { recursive: true });
+  }
+  // cwd is the space-free parent so no local ./lenses is auto-detected and the
+  // packaged directory is the only source under test.
+  const out = execFileSync(process.execPath, [join(home, 'bin/crosscheck.mjs'),
+    'lenses'], { cwd: parent, encoding: 'utf8' });
+  assert.match(out, /lens\(es\) from 1 source\(s\)/);
+  assert.match(out, /security-check/, 'the packaged lenses are the ones loaded');
+  assert.ok(out.includes('my source'),
+    'the lens directory resolved to the real path, escapes decoded');
+});
+
+// `report` documents JSON on stdin as an alternative to --in, and nothing
+// exercised it. readFileSync(0) is the implementation, and reading fd 0
+// synchronously is the part of stdin handling most likely to differ on Windows.
+test('report reads a run piped on stdin, not only --in', () => {
+  const run = JSON.stringify([
+    { lens: 'check', output: 'lib/a.js:41 — BLOCK — stale rows — guard it' },
+    { lens: 'architect', output: 'lib/a.js:41 — BLOCK — stale rows — guard it' }
+  ]);
+  const result = spawnSync(process.execPath, [CLI, 'report'],
+    { input: run, encoding: 'utf8' });
+  assert.equal(result.status, 0, String(result.stderr));
+  assert.match(result.stdout, /## BLOCK \(1\)/);
+  assert.match(result.stdout, /CONSENSUS/, 'both lenses merge to one finding');
 });

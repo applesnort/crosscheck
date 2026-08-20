@@ -130,3 +130,34 @@ test('no config anywhere returns null rather than throwing', () => {
 test('findConfig without a probe fails loudly', () => {
   assert.throws(() => findConfig('/a'), /requires an exists\(\) probe/);
 });
+
+// Windows. The walk used to be built out of `/` string surgery, so on a Windows
+// cwd the parent regex never matched: the search probed the starting directory
+// and stopped. A project's config was silently ignored unless you happened to
+// run from the repo root — the exact invisible behaviour this tool rejects.
+test('the search walks upward on a Windows path', () => {
+  const present = new Set(['C:\\repo\\.crosscheckrc.json']);
+  assert.equal(
+    findConfig('C:\\repo\\src\\deep', { exists: p => present.has(p) }),
+    'C:\\repo\\.crosscheckrc.json');
+});
+
+test('the Windows walk stops at a declared root', () => {
+  const present = new Set(['C:\\.crosscheckrc.json']);
+  assert.equal(
+    findConfig('C:\\repo\\src', {
+      exists: p => present.has(p),
+      isRoot: d => d === 'C:\\repo'
+    }),
+    null);
+});
+
+test('a Windows walk with no config terminates at the drive root', () => {
+  const probed = [];
+  assert.equal(
+    findConfig('C:\\a\\b', { exists: p => { probed.push(p); return false; } }),
+    null);
+  assert.ok(probed.some(p => p.startsWith('C:\\a\\b')), 'probes the start');
+  assert.ok(probed.some(p => p.startsWith('C:\\a\\.')), 'probes the parent');
+  assert.ok(probed.some(p => p.startsWith('C:/.')), 'probes the drive root');
+});

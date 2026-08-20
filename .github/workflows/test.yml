@@ -16,11 +16,20 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         node: ['20.x', '22.x', '24.x']
+        # Windows is where path handling actually differs — separators, drive
+        # letters, no /bin/sh. One version is enough to catch a regression
+        # there; the Node matrix is about language features, not the platform.
+        include:
+          - os: windows-latest
+            node: '22.x'
+          - os: macos-latest
+            node: '22.x'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -31,7 +40,11 @@ jobs:
         # test/cli-smoke.test.mjs spawns the real binary against a real
         # directory. Every bug that reached a user lived in a seam between
         # correct units, which is precisely what unit tests cannot see.
-        run: node --test test/*.test.mjs
+        #
+        # No glob: neither PowerShell nor cmd.exe expands one for an external
+        # command, so `test/*.test.mjs` reached node as a literal on Windows.
+        # Node's own discovery is the portable spelling.
+        run: node --test
 
   calibrate:
     # The panel's own scorer, run against a recorded lens output. Exits non-zero

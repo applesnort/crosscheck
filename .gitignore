@@ -17,3 +17,6 @@ package-lock.json
 
 # Result cache — content-addressed, safe to delete
 .crosscheck/cache/
+
+# Meta-output: PRDs, workplans, handoffs, scratch scripts
+scratchpad/

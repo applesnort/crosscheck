@@ -8,11 +8,63 @@ changes land.
 Entries before 0.7.0 were reconstructed from commit history after the fact, so
 they name what each version did rather than itemising every change in it.
 
-**Published to npm: 0.2.0, 0.2.1, 0.2.2, 0.3.0, 0.6.0.** 0.4.0, 0.5.0, 0.6.1 and
-0.6.2 exist as versions in this repository but were never published, so a
-consumer resolving `@0.6` gets 0.6.0 and none of the fixes after it.
+**Published to npm: 0.2.0, 0.2.1, 0.2.2, 0.3.0, 0.6.0, 0.7.0.** 0.4.0, 0.5.0,
+0.6.1 and 0.6.2 exist as versions in this repository but were never published,
+so a consumer resolving `@0.6` gets 0.6.0 and none of the fixes after it.
 
-## [0.7.0] — unreleased
+## [0.7.1] — unreleased
+
+### Fixed
+
+- **crosscheck could not run on Windows at all.** The packaged lens directory
+  was resolved with `new URL(...).pathname`, which is a URL path rather than a
+  filesystem one: on Windows it carries a leading slash before the drive letter
+  (`/C:/Users/...`). `readdirSync` threw an uncaught `ENOENT` before any command
+  that loads the built-in lenses could do anything, so `run` and `lenses` died
+  on a raw Node stack trace.
+
+  The same bug broke **every platform** whenever the install path contained a
+  space, because a URL path keeps its percent-escapes: `/Users/me/my source/`
+  arrived as `/Users/me/my%20source/` and resolved to nothing.
+
+- Config discovery silently stopped working on Windows. `findConfig` walked
+  upward using `/` string surgery, so a Windows `cwd` never yielded a parent:
+  the search probed the starting directory and gave up. A project's
+  `.crosscheckrc.json` was ignored unless you happened to run from the repo
+  root — and nothing said so, which is the invisible behaviour this tool rejects
+  everywhere else.
+
+- Routing lost every directory-anchored glob on Windows. `collectFiles` reported
+  paths with the platform separator, and the matcher only understood `/`.
+  Extension globs matched anyway (`[^/]*` eats a backslash), so the roster
+  filled and no `UNREVIEWED` line appeared while `**/components/**`,
+  `**/migrations/**`, `**/views/**`, `**/pages/**` and `**/schema*` quietly
+  matched nothing. Coverage narrowed and the run still reported as complete.
+
+  Paths are now reported with `/` on every platform, which also makes a
+  path-mode run agree with the same run under `--diff` — git has always emitted
+  `/`.
+
+- SARIF `artifactLocation.uri` is a URI reference, so a Windows path was not
+  merely ugly: a backslash is not a separator there and GitHub code scanning
+  could not map a result back to its file.
+
+- `npm test` did not work on Windows. The script globbed `test/*.test.mjs`, and
+  neither `cmd.exe` nor PowerShell expands a glob for an external command, so
+  node received the pattern as a literal. It now uses Node's own test
+  discovery.
+
+### Changed
+
+- CI runs the suite on Windows and macOS as well as Linux. Nothing above would
+  have reached a user with a Windows job in the matrix, and nothing would catch
+  a regression without one.
+
+- The CLI smoke-test stubs are Node scripts rather than `#!/bin/sh` ones, and no
+  longer need an execute bit. The suite could not run on Windows either, which
+  is the other half of why none of this was caught.
+
+## [0.7.0] — 2026-08-13
 
 ### Fixed
 
