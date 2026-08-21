@@ -47,20 +47,22 @@ A published composite action was considered and dropped. It would pin crosscheck
 version inside a second release process, and `npx @applesnort/crosscheck` in a
 scaffolded workflow is one line either way.
 
-## Phase 4 — Digital Bazaar harness integration
+## Phase 4 — house lenses for an internal harness
 
-The argument for adoption is not "a review tool". DB's own Tier-1 rule requires
-any skill with an LLM in the path to have a way to know if it regressed;
-`crosscheck calibrate` is that mechanism, generically, with a CI exit code.
+The argument for adoption is not "a review tool". A team whose own rules require
+any skill with an LLM in the path to prove it has not regressed needs a mechanism
+for that; `crosscheck calibrate` is that mechanism, generically, with a CI exit
+code.
 
-- `lenses/` for DB: house conventions, MongoDB record shape, plain-JavaScript,
-  Tier-0 data handling
-- a thin skill invoking crosscheck with those lenses, matching how the existing
-  db-lint and db-ci skills already shell out
-- a calibration fixture of planted DB-convention violations, wired into CI
+- `lenses/` for a team's own conventions: house style, storage-layer record
+  shape, language policy, data-handling rules
+- a thin skill invoking crosscheck with those lenses, matching how existing lint
+  and CI skills already shell out
+- a calibration fixture of planted convention violations, wired into CI
 
-`.ai-class` stays out of crosscheck. Data classification is DB policy and does not
-belong in a general tool — the `preflight` hook from Phase 1 is how DB enforces it.
+Data classification stays out of crosscheck. Which repos a tool may read is org
+policy and does not belong in a general tool — the `preflight` hook from Phase 1
+is how a team enforces it.
 
 ## Phase 5 — the measured bias
 
