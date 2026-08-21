@@ -1,7 +1,7 @@
 ---
 name: check
 summary: correctness — boundaries, absent values, error paths, concurrency
-when: [**/*.{js,mjs,cjs,jsx,ts,tsx,py,go,rb,java,cs,rs,php,kt,swift,vue,svelte}]
+when: [**/*.{js,mjs,cjs,jsx,ts,tsx,py,go,rb,java,cs,rs,php,kt,swift,vue,svelte}, "**/*.example"]
 owns: defects that produce wrong behavior at runtime
 not-owns: style, naming, architecture, security categories, usability
 cites: []

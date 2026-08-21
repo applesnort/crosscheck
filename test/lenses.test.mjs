@@ -347,3 +347,26 @@ test('a Windows tree routes to the same roster as a POSIX one', () => {
   assert.equal(matchesAny('src\\components\\panel.css', ['**/*.{jsx,tsx,vue,svelte,html}']),
     false, 'the .css file is claimed by the directory glob alone');
 });
+
+// A `.example` file is a template of whatever it is named after, and it is
+// where confident, wrong, copy-pasted instructions live. Before `**/*.example`
+// was routed, a 36-line `configs/local.js.example` carrying every substantive
+// claim in a change was read by no lens at all, while the run still reported
+// as complete because every lens that skipped it said "nothing in scope
+// matches". Only `UNREVIEWED` named it.
+test('a .js.example file routes to the code lenses, not just UNREVIEWED', () => {
+  const shipped = readdirSync(LENS_DIR)
+    .filter(f => f.endsWith('.md') && f !== 'README.md')
+    .map(f => parseFrontmatter(readFileSync(join(LENS_DIR, f), 'utf8')));
+  const { roster } = routeRoster(shipped, ['configs/local.js.example']);
+  const names = roster.map(l => l.name).sort();
+  for (const lens of ['architect', 'check', 'security-check', 'taint']) {
+    assert.ok(names.includes(lens), `${lens} reads the example file`);
+  }
+  // Not a vacuous pass: the extension globs alone must not claim it, so the
+  // assertion above is carried by `**/*.example` and fails if that is dropped.
+  assert.equal(
+    matchesAny('configs/local.js.example',
+      ['**/*.{js,mjs,cjs,jsx,ts,tsx,py,go,rb,java,cs,rs,php,kt,swift,vue,svelte}']),
+    false, 'the extension globs do not match a .js.example path');
+});

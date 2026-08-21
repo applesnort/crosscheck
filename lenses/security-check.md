@@ -1,7 +1,7 @@
 ---
 name: security-check
 summary: application security — trust boundaries, injection, secrets, exposure
-when: [**/*.{js,mjs,cjs,ts,tsx,py,go,rb,java,cs,rs,php,kt,swift,sql,vue,svelte}]
+when: [**/*.{js,mjs,cjs,ts,tsx,py,go,rb,java,cs,rs,php,kt,swift,sql,vue,svelte}, "**/*.example"]
 owns: exploitable weaknesses reachable by an untrusted or under-privileged caller
 not-owns: general correctness, architecture preference, usability, styling
 cites: ["OWASP Top 10 (2021)", "OWASP ASVS", "CWE"]

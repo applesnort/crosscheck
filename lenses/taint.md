@@ -1,7 +1,7 @@
 ---
 name: taint
 summary: data flow from untrusted origin to dangerous operation, and what sanitises it
-when: [**/*.{js,mjs,cjs,ts,tsx,py,go,rb,java,cs,rs,php,kt,swift,vue,svelte}]
+when: [**/*.{js,mjs,cjs,ts,tsx,py,go,rb,java,cs,rs,php,kt,swift,vue,svelte}, "**/*.example"]
 owns: untrusted values reaching an operation that interprets them, unsanitised
 not-owns: security policy, authentication design, crypto choice, correctness, architecture, usability
 cites: []
