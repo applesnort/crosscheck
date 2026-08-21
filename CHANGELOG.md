@@ -8,11 +8,35 @@ changes land.
 Entries before 0.7.0 were reconstructed from commit history after the fact, so
 they name what each version did rather than itemising every change in it.
 
-**Published to npm: 0.2.0, 0.2.1, 0.2.2, 0.3.0, 0.6.0, 0.7.0.** 0.4.0, 0.5.0,
+**Published to npm: 0.2.0, 0.2.1, 0.2.2, 0.3.0, 0.6.0, 0.7.0, 0.7.1.** 0.4.0, 0.5.0,
 0.6.1 and 0.6.2 exist as versions in this repository but were never published,
 so a consumer resolving `@0.6` gets 0.6.0 and none of the fixes after it.
 
-## [0.7.1] — unreleased
+## [0.8.0] — unreleased
+
+### Fixed
+
+- **`.example` files were reviewed by no lens.** The code lenses route by
+  extension, so `configs/local.js.example`, `settings.py.example` and every
+  other `<name>.<ext>.example` matched nothing — and because each lens that
+  skipped it reported "nothing in scope matches", the run still read as
+  complete. Only the `UNREVIEWED` line named the file.
+
+  This is the same failure mode as the Windows glob bug fixed in 0.7.1:
+  coverage narrows and nothing says so. It is worth closing because an
+  `.example` file is where copy-pasted setup instructions live, and a wrong
+  instruction there is followed rather than reviewed — in the change that
+  surfaced this, a 36-line `.example` carried the majority of the diff's
+  substantive claims and three of them were wrong.
+
+  `architect`, `check`, `security-check` and `taint` now route `**/*.example`.
+  `ux` deliberately does not: an example file is not an interface.
+
+  This is a minor rather than a patch because it changes which files a lens
+  reads, so a run over the same diff can now produce findings it did not
+  before, and costs more.
+
+## [0.7.1] — 2026-08-20
 
 ### Fixed
 
