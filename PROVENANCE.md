@@ -20,6 +20,23 @@ deliberately **not** consulted while writing the versions in this repository, an
 no text from them carries forward. That is the reason these files exist as a fresh
 composition rather than as a cleanup of the originals.
 
+## The example lenses
+
+`lenses/examples/fitment-depth.md`, `lenses/examples/metafield-hygiene.md`, and
+`lenses/examples/embedded-request-safety.md` were written by
+[@cunningorb](https://github.com/cunningorb) on 2026-08-20 for a commercial
+Shopify application, and are reproduced here verbatim with permission.
+
+They are included as worked examples of a domain lens, a form the packaged five
+cannot demonstrate because they are deliberately general. They are not loaded:
+lens discovery does not descend into subdirectories, and their `when:` globs name
+paths outside this repository.
+
+The originals referenced a specific dated production incident. That reference was
+generalised to the failure mode alone before inclusion here — the rule keeps its
+stated consequence, which is what makes it instructive, without identifying an
+event or a storefront.
+
 ## The foreman and the library
 
 `foreman.md` describes the dispatch, verification, merge, and reporting method. It
@@ -52,6 +69,10 @@ repository offers is a specific, documented method — not a novel concept.
   permitted with attribution; rather than carry that obligation here, the lens is
   omitted. Anyone adding one should use the GOV.UK personas directly and attribute
   them under OGL v3.
-- **Domain-specific lenses.** Lenses encoding a particular product's domain, or
-  a particular named colleague's review preferences, are project-local by nature
-  and are not published.
+- **Domain-specific lenses, as part of the roster.** Lenses encoding a particular
+  product's domain, or a particular named colleague's review preferences, are
+  project-local by nature and are not shipped as lenses crosscheck will run.
+  `lenses/examples/` is the one exception and does not weaken this: those files
+  are illustrative, are excluded from discovery because it does not recurse, and
+  name paths that exist only in their original repository. The rule is about what
+  runs, not about what may be read.
