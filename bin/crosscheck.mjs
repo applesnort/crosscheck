@@ -76,7 +76,9 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { formatScore, score } from '../lib/calibrate.mjs';
 import { findConfig, mergeConfig, validateConfig } from '../lib/config.mjs';
-import { parseFrontmatter, resolveLensSet } from '../lib/lenses.mjs';
+import {
+  parseFrontmatter, parseInvariants, resolveLensSet, validateLens
+} from '../lib/lenses.mjs';
 import {
   applyVerdicts, countsBySeverity, lensOverlap, mergeFindings, panelVerdict
 } from '../lib/merge.mjs';
@@ -245,7 +247,15 @@ function loadLenses(dir) {
         `crosscheck: ignoring ${file} — no frontmatter with a name\n`);
       continue;
     }
-    lenses.push({ ...meta, definition: text, definitionPath: path });
+    const invariants = parseInvariants(text);
+    const checked = validateLens({ ...meta, invariants });
+    if (!checked.ok) {
+      // A half-written invariant is worse than none: it produces a lens that
+      // looks in the right place and declines to call what it finds a defect.
+      fail(`lens ${meta.name} (${path}) is invalid:\n  - ` +
+        checked.problems.join('\n  - '));
+    }
+    lenses.push({ ...meta, invariants, definition: text, definitionPath: path });
   }
   return lenses;
 }

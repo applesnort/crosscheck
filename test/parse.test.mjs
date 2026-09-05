@@ -70,7 +70,8 @@ test('NO FINDINGS is recognized, and is not an error', () => {
   assert.equal(isNoFindings('  no findings  '), true);
   assert.equal(isNoFindings('no findings were relevant'), false);
   const r = parseLensOutput('NO FINDINGS');
-  assert.deepEqual(r, { findings: [], unparsed: [], noFindings: true });
+  assert.deepEqual(r,
+    { findings: [], unparsed: [], coverage: [], noFindings: true });
 });
 
 test('unparsed lines are reported, never silently dropped', () => {
