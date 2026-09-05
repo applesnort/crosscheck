@@ -411,6 +411,56 @@ produced by **both** lenses at once — both had to resolve a single opaque help
 both inferred its behaviour from its name. Independence of *method* does not give
 independence of *failure*.
 
+## Version benchmarks
+
+[`PREREGISTERED.md`](fixtures/calibration/PREREGISTERED.md) tests whether a
+*claim* holds. This tests whether a *release* is better than the one before it.
+They are different instruments and both are needed: six recorded rounds could
+all support the consensus claim while a release quietly got worse at finding
+things.
+
+| version | recall | precision | defects found | false positives |
+|---|---|---|---|---|
+| 0.8.0 | 85.7% | 58.3% | 6/7 | 5 |
+| 0.9.0 | 100% | 61.5% | 7/7 | 5 |
+
+Regenerate with:
+
+```sh
+node scripts/benchmark.mjs --versions main,WORKING --model gemma4:latest
+```
+
+**Read the absolute numbers with care.** This runs one small local model against
+the seven planted defects in `fixtures/calibration`. A capable agent runner
+scores 100% recall on the same fixture — that is in the pre-registered rounds.
+A weak model is deliberately the wrong instrument for "how good is crosscheck"
+and the right one for "did this version get worse", because it has room to move
+in both directions and costs nothing to run.
+
+Three things are held fixed, and the numbers mean nothing without them:
+
+- **One model**, local, temperature 0, fixed seed. A hosted model can change
+  under you between runs, which turns a regression suite into a log of someone
+  else's deploys.
+- **One fixture**, frozen. Adjusting ground truth after seeing which defects a
+  version bit is what makes a benchmark meaningless, and the pre-registration
+  rules it out by name.
+- **One scorer.** Every version is graded by the current checkout's `calibrate`
+  against the current `expected.json`. Letting each version grade itself would
+  measure changes to the scorer as though they were changes to the tool.
+
+Versions before 0.9.0 name files and expect the runner to open them, so the
+benchmark runner inlines source when a prompt did not carry it — the capability
+their contract assumed. Without that they score zero on everything, which is a
+fact about the runner and not about the version.
+
+**The rule this exists to enforce: a release has to demonstrate it improved
+something.** 0.9.0 first measured *worse* than 0.8.0 — recall 57.1% against
+85.7% — and shipping it would have been a regression nobody could see. The cause
+and the fix are in [ADR 0003](docs/adr/0003-lens-framing-before-source.md).
+Per-lens numbers are kept alongside the totals for the same reason: `architect`
+is still below its 0.8.0 recall, and the aggregate improvement hides it.
+
 ## What's here
 
 ```

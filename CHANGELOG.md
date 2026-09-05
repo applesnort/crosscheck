@@ -74,8 +74,25 @@ them were compatible with any state of the file — see
 - Coverage was parsed and then dropped by `runPanel` and `parseReports`, so
   every abstention arrived looking unsupported.
 
+### Added — measurement
+
+- **`scripts/benchmark.mjs`** scores git refs against the calibration fixture on
+  a fixed local model, so a release has to demonstrate it improved something.
+  Results are in the README. This release measured *worse* than 0.8.0 on its
+  first run — recall 57.1% against 85.7% — and the cause is
+  [ADR 0003](docs/adr/0003-lens-framing-before-source.md).
+- Positive controls: an invariant may carry a `canary:`, a known violation of
+  itself placed in the lens's scope. Catching it shows the runner can perform
+  the check; missing it voids that lens's silence, though never a reported
+  blocker.
+
 ### Changed
 
+- **The lens framing now precedes the source it reviews.** 0.9.0 originally led
+  with source so consecutive lenses shared a cacheable prefix. Measured on one
+  fixed model, `check` scored 0.0% recall that way against 57.1% with the
+  definition first. Cross-lens prefix caching is given up: it was an inferred
+  saving, and this was a measured loss. Supersedes the ordering half of ADR 0001.
 - `--max-dispatches` no longer describes itself as the only unit that can be
   capped; `--budget` now caps tokens. Both still name what they dropped.
 - An unreadable in-scope file stops the run rather than being reviewed as a gap.
