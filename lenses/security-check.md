@@ -72,6 +72,47 @@ if you can show the exploit; say so explicitly rather than forcing a category.
 - Unbounded work triggered by a single unauthenticated request.
 - Absence of throttling on authentication, enumeration, or expensive endpoints.
 
+## Invariants
+
+Work these mechanically before reasoning about anything else. Each states what
+to look at and what an observation means. The facts you need to apply them are
+in the rules — do not rely on recognising a vulnerability by its shape.
+
+### I1 — a secret is not reproducible by whoever requested it
+
+**observe:** For each function returning a secret, list every input that
+contributes to the returned value and classify each as: output of a
+cryptographically secure generator (`randomBytes`, `randomUUID`,
+`getRandomValues`); a value the caller supplied; a clock reading; or a literal
+constant. An attacker who requests a token knows the arguments they supplied and
+the approximate second it was issued.
+
+**verdict:** A returned secret whose contributing inputs are drawn only from
+caller-supplied values, clock readings and constants is reproducible by anyone
+holding those. Hashing does not repair this — a digest of guessable inputs is
+guessable by digesting the guesses. Report BLOCK.
+
+### I2 — a secret is compared in constant time
+
+**observe:** List every site comparing two values for equality where either
+operand is a secret, and name the operator or function each uses.
+
+**verdict:** `===` and `!==` on strings return as soon as they reach a differing
+byte, so how long the comparison takes reveals how many leading bytes matched. A
+secret compared with `===` or `!==` is a defect, including where the file
+defines a constant-time helper that this site does not call. Report BLOCK.
+
+### I3 — a read of an owned asset checks the caller
+
+**observe:** List every exported function whose parameters include a caller
+identity — a parameter naming a user, caller, actor or principal — and every
+line of its body where that parameter name appears.
+
+**verdict:** A caller identity parameter that appears in the signature and on no
+line of the body means the function performs no authorization check, and any
+caller holding a reference reads another principal's data. Report BLOCK. Do not
+record it as acceptable or note it only for completeness.
+
 ## Project specifics
 
 If the project documents its own security requirements — an auth pattern, a
