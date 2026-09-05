@@ -86,7 +86,7 @@ function fail(message) {
 // to compare against something.
 const BOOLEAN_FLAGS = new Set([
   'dry-run', 'mixed', 'no-builtin', 'staged', 'verify', 'no-verify', 'diff',
-  'no-cache', 'force'
+  'no-cache', 'force', 'no-embed'
 ]);
 
 function parseArgs(argv) {
@@ -677,9 +677,36 @@ async function runCommand(cliOptions, positional) {
     fail('no lens matched the target; nothing to run');
   }
 
+  // Read every in-scope file once. The cache key already hashes these contents,
+  // so this is the same read done for one more reason rather than a new cost.
+  const embed = !options['no-embed'];
+  const sourceText = embed
+    ? Object.fromEntries(files.map(path => [
+      path, existsSync(path) ? readFileSync(path, 'utf8') : null
+    ]))
+    : null;
+  if (embed) {
+    const unreadable = Object.entries(sourceText)
+      .filter(([, content]) => content == null).map(([path]) => path);
+    if (unreadable.length) {
+      fail(`cannot read for review: ${unreadable.join(', ')}`);
+    }
+  }
+
   const promptOptions = {
     mixedCorpus: Boolean(options.mixed),
-    rangesByFile
+    rangesByFile,
+    sources: sourceText,
+    hunkContext: Number(options['hunk-context'] ?? 6)
+  };
+
+  // The cache key hashes file contents separately, so the prompt options it sees
+  // carry only the switches that change the prompt's shape.
+  const cacheablePromptOptions = {
+    mixedCorpus: promptOptions.mixedCorpus,
+    rangesByFile: promptOptions.rangesByFile,
+    embed,
+    hunkContext: promptOptions.hunkContext
   };
 
   if (options['dry-run']) {
