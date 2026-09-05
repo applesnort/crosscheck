@@ -393,7 +393,7 @@ function buildMerged(options) {
   };
 }
 
-function report({ merged, suppressed, stale, refuted = [] }) {
+function report({ merged, suppressed, stale, refuted = [], untested = [] }) {
   const counts = countsBySeverity(merged.findings);
   const out = [];
   out.push('# Crosscheck report');
@@ -411,6 +411,14 @@ function report({ merged, suppressed, stale, refuted = [] }) {
   // Always stated, including zero: a finding that vanished without a count is
   // indistinguishable from one that was never found.
   out.push('', `Refuted in verification: ${refuted.length}.`);
+  if (untested.length) {
+    // Surviving a refutation attempt and never facing one are different
+    // standings for a finding, and only one of them is evidence.
+    out.push('', `Kept without a test: ${untested.length} — the verifier ` +
+      'returned no usable verdict, so these were neither refuted nor ' +
+      'corroborated: ' +
+      untested.map(f => `${f.file}:${f.line}`).join(', ') + '.');
+  }
   if (merged.silent?.length) {
     out.push('', `Reported nothing: ${merged.silent.join(', ')}. A lens that ` +
       'examined its scope and found nothing is indistinguishable here from one ' +
@@ -873,6 +881,7 @@ async function runCommand(cliOptions, positional) {
   // Verification is on by default for BLOCK findings: false positives cost more
   // than misses, because a panel that cries wolf stops being read at all.
   let refuted = [];
+  let untested = [];
   const verifyWanted = options['no-verify'] ? false : true;
   if (verifyWanted) {
     const candidates = merged.findings.filter(f =>
@@ -885,7 +894,9 @@ async function runCommand(cliOptions, positional) {
         exec: execCommand(options.exec),
         concurrency: Number(options.concurrency ?? 4),
         onVerdict: (f, v) => process.stderr.write(
-          `  ${v.refuted ? '✗ refuted' : '✓ confirmed'} ${f.file}:${f.line}\n`)
+          `  ${v.refuted ? '✗ refuted'
+            : v.tested === false ? '? not tested'
+              : '✓ survived refutation'} ${f.file}:${f.line}\n`)
       });
       for (const f of verifyFailures) {
         // A verifier that did not run is not agreement; the finding stands.
@@ -895,10 +906,16 @@ async function runCommand(cliOptions, positional) {
       }
       const applied = applyVerdicts(merged.findings, verdicts);
       refuted = applied.refuted;
+      untested = applied.untested;
       merged = { ...merged, findings: applied.findings };
       if (refuted.length) {
         process.stderr.write(
           `crosscheck: ${refuted.length} finding(s) refuted and removed\n`);
+      }
+      if (untested.length) {
+        process.stderr.write(
+          `crosscheck: ${untested.length} finding(s) kept without a test — ` +
+          'the verifier returned no usable verdict for them\n');
       }
     }
   }
@@ -912,7 +929,7 @@ async function runCommand(cliOptions, positional) {
     merged = { ...merged, findings: filtered.findings };
   }
 
-  process.stdout.write(report({ merged, suppressed, stale, refuted }));
+  process.stdout.write(report({ merged, suppressed, stale, refuted, untested }));
 
   if (options['comment-file']) {
     writeFileSync(options['comment-file'], buildComment({

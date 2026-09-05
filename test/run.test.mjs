@@ -310,7 +310,7 @@ test('a refute prompt needs a finding with a file', () => {
 
 test('verdicts parse in both directions', () => {
   assert.deepEqual(parseVerdict('CONFIRMED — quota 0 reaches the branch'),
-    { refuted: false, reason: 'quota 0 reaches the branch' });
+    { tested: true, refuted: false, reason: 'quota 0 reaches the branch' });
   const r = parseVerdict('REFUTED — the caller validates before this runs');
   assert.equal(r.refuted, true);
   assert.match(r.reason, /caller validates/);
@@ -320,10 +320,17 @@ test('a verdict buried in prose is still found', () => {
   assert.equal(parseVerdict('Let me check.\nCONFIRMED — real').refuted, false);
 });
 
-test('an unusable verdict counts as refuted, matching the stated default', () => {
+// Replaces an earlier test asserting the opposite. The refute prompt tells the
+// MODEL to default to refuted when it cannot demonstrate the defect — a
+// judgement reached after looking. A verifier that emitted nothing usable made
+// no such judgement, and the tool treating the two identically dropped findings
+// on the strength of an absent test. The same event reaching the tool as a
+// non-zero exit already left the finding standing.
+test('an unusable verdict is not a refutation, and does not claim a test ran', () => {
   for (const text of ['', 'I am not sure', undefined, 'maybe?']) {
     const v = parseVerdict(text);
-    assert.equal(v.refuted, true, JSON.stringify(text));
+    assert.equal(v.refuted, false, JSON.stringify(text));
+    assert.equal(v.tested, false, JSON.stringify(text));
   }
   assert.match(parseVerdict('').reason, /no usable verdict/);
 });
