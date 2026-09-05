@@ -69,6 +69,7 @@ import { filterAgainstBaseline, staleBaselineEntries, toBaseline }
   from '../lib/baseline.mjs';
 import { parseReports } from '../lib/parse.mjs';
 import {
+  narrowRosterToFindings,
   planRun, promptsFor, resolveExec, runPanel, verifyFindings
 } from '../lib/run.mjs';
 import { cacheKey, createCache } from '../lib/cache.mjs';
@@ -742,9 +743,52 @@ async function runCommand(cliOptions, positional) {
     })({ prompt, lens, files });
   };
 
+  // Two-stage triage. A cheap runner sees the whole target; the real panel then
+  // sees only the files it flagged. Most code is clean, so most files never
+  // reach the expensive runner at all.
+  //
+  // The saving has a cost, and it is not hidden: a defect the cheap pass misses
+  // is a defect the expensive pass is never given the chance to find. Triage
+  // trades recall for spend, which is why it is opt-in and why the narrowing is
+  // always reported.
+  let panelRoster = roster;
+  if (options.triage) {
+    process.stderr.write(`crosscheck: triage pass — ${options.triage}\n`);
+    const triageDispatch = ({ prompt, lens, files }) => {
+      const meta = byLens.get(lens);
+      return execCommand(options.triage, {
+        lens, effort: meta?.effort ?? 'low', scope: meta?.scope
+      })({ prompt, lens, files });
+    };
+    const triaged = await runPanel({
+      roster,
+      skipped,
+      exec: triageDispatch,
+      concurrency: Number(options.concurrency ?? 4),
+      promptOptions,
+      onEstimate: line => process.stderr.write(`crosscheck: triage ${line}\n`),
+      onLensStart: lens => process.stderr.write(`  · ${lens}\n`),
+      onLensDone: (lens, r) => process.stderr.write(
+        r.ok
+          ? `  · ${lens} flagged ${r.findings} file-level hit(s)\n`
+          : `  ✗ ${lens} did not complete in triage\n`)
+    });
+    for (const f of triaged.failures) {
+      process.stderr.write(
+        `crosscheck: triage lens ${f.lens} failed — ${f.reason}\n`);
+    }
+    panelRoster = narrowRosterToFindings(roster, triaged.reports);
+    const kept = new Set(panelRoster.flatMap(l => l.files)).size;
+    process.stderr.write(panelRoster.length === 0
+      ? 'crosscheck: triage flagged nothing — the full panel did not run, so ' +
+        'this verdict is the cheap pass\'s\n'
+      : `crosscheck: triage narrowed the panel to ${kept} file(s) across ` +
+        `${panelRoster.length} lens(es)\n`);
+  }
+
   const cache = buildCache(options);
   const { reports, failures, dropped, cacheStats } = await runPanel({
-    roster,
+    roster: panelRoster,
     skipped,
     exec: dispatch,
     concurrency: Number(options.concurrency ?? 4),
