@@ -10,7 +10,9 @@
 //
 // crosscheck never talks to a model itself. `run --exec` names a command that
 // receives one lens prompt on stdin and returns findings on stdout, so any agent
-// CLI or wrapper works.
+// CLI or wrapper works. Since 0.9.0 the prompt carries the source it reviews, so
+// a bare model endpoint with no file access works too; --no-embed restores the
+// older prompt that names files and expects the runner to open them.
 //
 // For the commands below other than `run`, input is JSON on stdin or via --in:
 //   [{"lens": "check", "output": "lib/a.js:41 — BLOCK — issue — fix"},
@@ -21,6 +23,8 @@
 //                                --exec '<command>'  [--lenses dir] [--only a,b]
 //                                [--skip x,y] [--concurrency N] [--out run.json]
 //                                [--sarif f] [--baseline b] [--mixed] [--dry-run]
+//                                [--budget N] [--triage '<cheap command>']
+//                                [--no-embed] [--hunk-context N]
 //   crosscheck init              [--force]   scaffold config, lenses, workflow
 //   crosscheck lenses            [--lenses dir,dir] [--no-builtin]
 //   crosscheck report            [--in run.json] [--baseline b.json]
@@ -32,9 +36,20 @@
 // Options: --overlap <file>  independence data from `overlap` (report/sarif)
 //          --lenses <dir>    lens directory (routing + SARIF rule metadata)
 //          --max-dispatches N  cap lens runs; dropped lenses are named, never
-//                            silently omitted. crosscheck cannot see tokens or
-//                            money (--exec is any command), so dispatches are
-//                            the only unit it can honestly cap.
+//                            silently omitted.
+//          --budget N        cap estimated INPUT tokens. Lenses run in roster
+//                            order until the estimate is spent; the rest are
+//                            named. The estimate covers the prompt crosscheck
+//                            builds — not the runner's preamble, its reasoning,
+//                            nor any output — and says so wherever it prints.
+//          --triage '<cmd>'  cheap pass over everything first, then the real
+//                            panel over only the files it flagged. Trades
+//                            recall for spend: what triage misses, the panel
+//                            never sees. The narrowing is always reported.
+//          --no-embed        do not inline source; name the files and let the
+//                            runner open them, as before 0.9.0.
+//          --hunk-context N  context lines around changed lines for a lens
+//                            declaring `scope: hunks` (default 6)
 //          --comment-file <f>  write a pull-request summary comment
 //          --no-cache        do not read or write .crosscheck/cache
 //          --cache-dir <dir> relocate the cache

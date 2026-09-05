@@ -162,6 +162,19 @@ worktree — without the rule having to exist upstream.
 A tool that costs real money per run gets switched off, and a switched-off tool
 finds nothing.
 
+**The prompt carries the source it reviews.** A lens prompt used to name its
+files and tell the runner to open them, which meant only an agent could run one.
+Pointed at a bare model with no file access, four lenses returned `NO FINDINGS`
+each against a fixture with seven planted defects — the model had nothing to look
+at. Since 0.9.0 the source is reproduced in the prompt, line-numbered, so any
+model endpoint can be a runner. `--no-embed` restores the older shape for an
+agent that prefers to read selectively.
+
+The source block leads the prompt and the lens definition follows it. Providers
+discount an input prefix that is byte-identical to a previous request, and files
+are sorted so that block is identical for every lens routed to the same set —
+which is where the panel's repetition stops being paid for twice.
+
 **A cheap lens should not pay for an expensive model.** `exec` may be a map:
 
 ```json
@@ -177,23 +190,62 @@ Precedence is the lens's own `exec` in its frontmatter, then the map entry, then
 `default`. A rostered lens with no command anywhere fails loudly and names itself
 — it is never quietly skipped.
 
+**A lens declares how much it needs to see.** `scope: hunks` in a lens's
+frontmatter sends only the changed lines plus context, which on a large file is
+the difference between reviewing forty lines and two thousand. It is wrong for
+any lens that follows data across a file or judges structure, so it is the lens
+author's call and not a global switch. `--hunk-context N` sets the margin.
+
+**A lens declares how hard to think.** `effort: low | medium | high` reaches the
+runner as `CROSSCHECK_EFFORT`, alongside `CROSSCHECK_LENS` and
+`CROSSCHECK_SCOPE`. crosscheck cannot know your provider's flag for reasoning
+depth — `--exec` is an arbitrary command — so it publishes the intent and your
+wrapper translates it. Leaving every lens at maximum reasoning is usually the
+largest bill nobody looks at.
+
 **Unchanged files are not re-reviewed.** Results are cached under
 `.crosscheck/cache`, keyed on the lens definition, the files, and their contents.
 The definition is part of the key deliberately: editing a lens must invalidate its
 results, or you would be served answers from the previous prompt with no way to
 tell. `--no-cache` disables it, `--cache-dir` relocates it. A failed lens is never
-cached, so it is retried rather than permanently wrong.
+cached, so it is retried rather than permanently wrong. In CI the cache directory
+has to be restored between runs or it does nothing at all.
 
-**`--max-dispatches N` caps the run, and says what it dropped:**
+**`--budget N` caps estimated input tokens, and says what it dropped:**
 
 ```
-crosscheck: BUDGET REACHED — 3 lens(es) not run: check, security-check, taint
+crosscheck: estimated input: ~10,939 tokens against a budget of 6,000 (estimate; ...)
+crosscheck: BUDGET REACHED — 2 lens(es) not run: security-check, taint
 ```
 
-The unit is dispatches, not dollars. crosscheck cannot see tokens or cost —
-`--exec` is an arbitrary command — so a monetary budget would be a number invented
-from nothing. Truncation is always named, because a run that quietly stopped early
-looks exactly like a run that found nothing.
+The estimate prints on every run, capped or not, because a user asked to justify
+the spend needs the number even when nothing is limiting it.
+
+It is called an estimate in those words wherever it appears. It counts the input
+crosscheck builds and nothing else: the runner's own preamble, its tool calls,
+its reasoning tokens and all of its output are outside what this can see. One
+measured agent CLI spent roughly 15,000 tokens before it read the prompt at all.
+Treat the number as a floor on input, not a bill.
+
+**`--max-dispatches N` caps the run by lens count** rather than by tokens, and
+names what it dropped the same way. Truncation is always named, because a run
+that quietly stopped early looks exactly like a run that found nothing.
+
+**`--triage '<cheap command>'` runs a cheap pass first.** The cheap runner sees
+the whole target; the real panel then sees only the files it flagged. Most code
+is clean, so most files never reach the expensive runner.
+
+```
+crosscheck run --diff --triage 'my-local-model' --exec 'claude -p'
+```
+
+The saving is a trade, and it is stated rather than buried: a defect the cheap
+pass misses is one the expensive pass never gets the chance to find. The
+narrowing is always reported, and a run where triage flagged nothing says
+outright that the verdict belongs to the cheap pass, not to the panel. A lens
+that *failed* during triage is not read as a clean file — its files go through to
+the panel, because a lens that died found nothing in the way a lens that looked
+and found nothing did not.
 
 ## SARIF output
 
@@ -405,7 +457,7 @@ $EDITOR .crosscheck/lenses/chaos.md
 npx @applesnort/crosscheck lenses     # what resolved, and from where
 ```
 
-A lens is a markdown file: five frontmatter keys, then the prompt.
+A lens is a markdown file: five required frontmatter keys, then the prompt.
 
 ```markdown
 ---
@@ -428,6 +480,15 @@ CONSIDER. If nothing here can be broken, reply exactly `NO FINDINGS`.
 the reason printed. `not-owns` is required: a lens that never declines dilutes the
 signal everything else depends on. The body should end by restating the output
 contract, since that is what the parser expects back.
+
+Two optional keys control what a lens costs. `scope: hunks` sends it only the
+changed lines plus context instead of whole files — right for a lens judging
+line-level correctness, wrong for one that follows data across a file or judges
+structure. `effort: low | medium | high` reaches the runner as
+`CROSSCHECK_EFFORT` for your wrapper to translate into whatever your provider
+calls reasoning depth. Both are optional; both reject an unrecognised value
+rather than defaulting quietly, since a typo that silently does nothing bills you
+for a setting you believe is on.
 
 `crosscheck lenses` prints the resolved set with each lens's origin and globs,
 which is the fastest way to see why something did or did not run.
