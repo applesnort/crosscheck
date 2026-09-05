@@ -14,10 +14,12 @@ so a consumer resolving `@0.6` gets 0.6.0 and none of the fixes after it.
 
 ## [0.9.0] — 2026-09-04
 
-Token cost. crosscheck could not previously say anything about what a run would
-spend: `--exec` is an arbitrary command, so dispatches were the only unit it
-could cap. Embedding the source makes the input side knowable, and everything
-here follows from that.
+Two themes. **Token cost:** crosscheck could not previously say anything about
+what a run would spend, because `--exec` is an arbitrary command and dispatches
+were the only unit it could cap. Embedding the source makes the input side
+knowable. **Falsifiability:** every output is an empirical claim, and three of
+them were compatible with any state of the file — see
+[ADR 0002](docs/adr/0002-falsifiability-as-a-design-constraint.md).
 
 ### Added
 
@@ -43,11 +45,42 @@ here follows from that.
 - **ADR 0001** records the embedding decision, including the alternatives
   rejected and what it costs when it is the wrong call.
 
+### Added — falsifiability
+
+- **Lens `invariants`.** A lens may declare invariants in its body, each pairing
+  an `observe:` rule with a `verdict:` rule. Both are required; a lens missing
+  either fails to load. This is how a lens lowers the capability its questions
+  demand. Measured on the calibration fixture with one local 8B model,
+  `security-check` found 0 of its 3 planted defects as prose and reported all
+  three as `BLOCK` with invariants (`calibrate` scores that run 2 of 3 — one
+  finding anchors a line outside the accepted span).
+- **`COVERAGE:` lines.** A lens that finds nothing states what it examined, so
+  declining to report becomes a claim a reader can check and find false. Bare
+  `NO FINDINGS` still parses and is reported as unsupported.
+- **`security-check` ships with three invariants**, each carrying the facts
+  needed to apply it rather than assuming the model supplies them.
+
+### Fixed
+
+- **An absent test is no longer a refutation.** An unparseable verifier verdict
+  removed the finding, while the same verifier exiting non-zero left it standing
+  — the same absence resolved two ways, and the destructive one was silent.
+  Verdicts now carry `tested`; untested findings stand and are reported apart
+  from ones that survived a refutation attempt.
+- **An abstaining panel no longer reads as a clean one.** Run against a fixture
+  with seven planted defects, three of them `BLOCK`, the panel previously said
+  `Ship`. Silent lenses are counted, named, and separated by whether they stated
+  coverage.
+- Coverage was parsed and then dropped by `runPanel` and `parseReports`, so
+  every abstention arrived looking unsupported.
+
 ### Changed
 
 - `--max-dispatches` no longer describes itself as the only unit that can be
   capped; `--budget` now caps tokens. Both still name what they dropped.
 - An unreadable in-scope file stops the run rather than being reviewed as a gap.
+- Verdict objects gained `tested`; `parseLensOutput` results gained `coverage`.
+  Both are additive, but a caller doing an exact-shape comparison will see them.
 
 ### Notes
 

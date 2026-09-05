@@ -273,6 +273,48 @@ lens skipped for irrelevance, a lens whose agent died, and a finding refuted dur
 verification are three different things and must read differently. A partial panel
 presented as a complete one is worse than no panel.
 
+## What a report has to be able to be wrong about
+
+Every line crosscheck emits is an empirical claim, and a claim that forbids
+nothing observable tells a reader nothing however confidently it is worded. Four
+rules follow from that, and [ADR 0002](docs/adr/0002-falsifiability-as-a-design-constraint.md)
+records why.
+
+**An abstention states what it examined.** A lens finding nothing emits coverage
+lines naming the sites it checked:
+
+```
+COVERAGE: I2 — 3 equality sites on token values
+COVERAGE: I3 — 8 exported functions, 7 read their caller identity
+NO FINDINGS
+```
+
+A bare `NO FINDINGS` is compatible with a clean file, a lens that could not
+recognise the defect, and a lens whose questions exceed the runner it was given.
+It cannot be wrong, so it is not a claim. Coverage can be checked against the
+file and found false. Bare abstention still parses — breaking every existing
+lens would be worse — and is reported as unsupported, separately from an
+abstention that showed its work.
+
+This is not hypothetical. A local 8B model returned `NO FINDINGS` on all four
+lenses against `fixtures/calibration`, which carries seven planted defects, three
+of them `BLOCK`. The verdict read `Ship`.
+
+**A test that did not run is not a negative result.** A finding is refuted only
+by a verdict refuting it. A verifier that produced nothing usable leaves the
+finding standing, and standing-untested is reported apart from
+survived-a-refutation. Previously an unparseable verdict removed the finding
+while the same verifier exiting non-zero left it in place — the same absence,
+resolved two ways, and the destructive one was silent.
+
+**Corroboration is not verification.** A finding that survived refutation is
+described as having survived one. Never confirmed, proven, or validated.
+
+**Consensus counts tests, not voices.** An abstention naming its coverage is a
+lens that tested and found nothing, which is evidence. An abstention naming
+nothing is a lens whose testing cannot be established. The report separates them
+and the verdict follows.
+
 ## Why lenses instead of one review pass
 
 A single review pass optimizes for one kind of defect at a time. Ask for "problems"
@@ -495,6 +537,45 @@ for a setting you believe is on.
 
 `crosscheck lenses` prints the resolved set with each lens's origin and globs,
 which is the fastest way to see why something did or did not run.
+
+### Invariants — how a lens lowers its own floor
+
+A lens asking a model to recognise a defect class needs a model that already
+recognises it. A lens asking it to enumerate sites and apply a stated rule needs
+much less. Declaring invariants is how a lens author makes that trade
+deliberately:
+
+```md
+## Invariants
+
+### I2 — a secret is compared in constant time
+
+**observe:** List every site comparing two values for equality where either
+operand is a secret, and name the operator or function each uses.
+
+**verdict:** `===` and `!==` on strings return as soon as they reach a differing
+byte, so how long the comparison takes reveals how many leading bytes matched. A
+secret compared with `===` or `!==` is a defect, including where the file defines
+a constant-time helper that this site does not call. Report BLOCK.
+```
+
+Both halves are required and a lens missing either fails to load. They fail
+differently: without `observe` there is nothing to check against the file;
+without `verdict` a model performs the observation correctly and then records
+the violation as acceptable, having been told what to find and not what it
+meant. That is a measured failure, not a hypothetical one.
+
+**Put the facts the rule needs inside the rule.** The measured pattern is that
+an invariant helps in proportion to how little the model must supply from its
+own knowledge. `security-check`'s I1 states that an attacker knows the arguments
+they sent and roughly when, and that hashing guessable inputs yields guessable
+output — because a model that had to know those failed the check.
+
+Measured on the calibration fixture with the same local 8B model:
+`security-check` found 0 of its 3 planted defects as prose, 0 again when a
+neutral prompt named exactly where to look, and reported all three as `BLOCK`
+with invariants. `calibrate` scores that last run 2 of 3 — one finding names the
+right defect but anchors a line outside the accepted span.
 
 ### Local lenses stay local
 

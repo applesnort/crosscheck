@@ -50,6 +50,13 @@
 //                            runner open them, as before 0.9.0.
 //          --hunk-context N  context lines around changed lines for a lens
 //                            declaring `scope: hunks` (default 6)
+//
+// A lens that finds nothing states what it examined, on COVERAGE lines before
+// its NO FINDINGS. A bare NO FINDINGS still parses and is reported as
+// unsupported: it is compatible with a clean file, a lens that could not
+// recognise the defect, and a lens whose questions exceed its runner, so it
+// forbids nothing and cannot be wrong. A lens may declare `invariants` in its
+// body to trade prose judgement for checks that can fail mechanically.
 //          --comment-file <f>  write a pull-request summary comment
 //          --no-cache        do not read or write .crosscheck/cache
 //          --cache-dir <dir> relocate the cache
