@@ -1,7 +1,7 @@
 {
   "name": "@applesnort/crosscheck",
-  "version": "0.8.0",
-  "description": "Run independent review lenses in parallel and merge their findings into one deduped, consensus-ranked report \u2014 with SARIF output.",
+  "version": "0.9.0",
+  "description": "Run independent review lenses in parallel and merge their findings into one deduped, consensus-ranked report — with SARIF output.",
   "license": "MIT",
   "author": "Joel Mangin",
   "type": "module",

@@ -12,6 +12,49 @@ they name what each version did rather than itemising every change in it.
 0.6.1 and 0.6.2 exist as versions in this repository but were never published,
 so a consumer resolving `@0.6` gets 0.6.0 and none of the fixes after it.
 
+## [0.9.0] — 2026-09-04
+
+Token cost. crosscheck could not previously say anything about what a run would
+spend: `--exec` is an arbitrary command, so dispatches were the only unit it
+could cap. Embedding the source makes the input side knowable, and everything
+here follows from that.
+
+### Added
+
+- **Source is embedded in lens prompts, and leads them.** A prompt used to name
+  its files and expect the runner to open them, so only an agent could run one;
+  a bare model returned `NO FINDINGS` on a fixture with seven planted defects
+  because it had nothing to look at. Source now appears in the prompt,
+  line-numbered, with files sorted so the block is byte-identical across every
+  lens routed to the same set — which is what a provider prefix cache needs.
+  `--no-embed` restores the previous prompt.
+- **`--budget N`** caps estimated input tokens, dropping lenses in roster order
+  and naming each one. The estimate prints on every run, capped or not, and is
+  labelled an estimate wherever it appears: it counts the prompt crosscheck
+  builds, never the runner's preamble, reasoning, or output.
+- **`--triage '<cheap command>'`** runs a cheap pass over the whole target, then
+  the real panel over only the files it flagged. The narrowing is always
+  reported, and a run where triage flagged nothing says the verdict is the cheap
+  pass's. A lens that failed during triage is not read as a clean file.
+- **`scope: hunks`** in lens frontmatter sends only changed lines plus context.
+  `--hunk-context N` sets the margin.
+- **`effort: low | medium | high`** in lens frontmatter reaches the runner as
+  `CROSSCHECK_EFFORT`, alongside `CROSSCHECK_LENS` and `CROSSCHECK_SCOPE`.
+- **ADR 0001** records the embedding decision, including the alternatives
+  rejected and what it costs when it is the wrong call.
+
+### Changed
+
+- `--max-dispatches` no longer describes itself as the only unit that can be
+  capped; `--budget` now caps tokens. Both still name what they dropped.
+- An unreadable in-scope file stops the run rather than being reviewed as a gap.
+
+### Notes
+
+Embedding sends the whole in-scope source for each routing group, whether or not
+a runner would have opened all of it. For a large file set against an agent that
+reads selectively this can cost more than it saves — `--no-embed` is the exit.
+
 ## [0.8.0] — unreleased
 
 ### Fixed
