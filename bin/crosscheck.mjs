@@ -10,7 +10,9 @@
 //
 // crosscheck never talks to a model itself. `run --exec` names a command that
 // receives one lens prompt on stdin and returns findings on stdout, so any agent
-// CLI or wrapper works.
+// CLI or wrapper works. Since 0.9.0 the prompt carries the source it reviews, so
+// a bare model endpoint with no file access works too; --no-embed restores the
+// older prompt that names files and expects the runner to open them.
 //
 // For the commands below other than `run`, input is JSON on stdin or via --in:
 //   [{"lens": "check", "output": "lib/a.js:41 — BLOCK — issue — fix"},
@@ -21,6 +23,8 @@
 //                                --exec '<command>'  [--lenses dir] [--only a,b]
 //                                [--skip x,y] [--concurrency N] [--out run.json]
 //                                [--sarif f] [--baseline b] [--mixed] [--dry-run]
+//                                [--budget N] [--triage '<cheap command>']
+//                                [--no-embed] [--hunk-context N]
 //   crosscheck init              [--force]   scaffold config, lenses, workflow
 //   crosscheck lenses            [--lenses dir,dir] [--no-builtin]
 //   crosscheck report            [--in run.json] [--baseline b.json]
@@ -32,9 +36,27 @@
 // Options: --overlap <file>  independence data from `overlap` (report/sarif)
 //          --lenses <dir>    lens directory (routing + SARIF rule metadata)
 //          --max-dispatches N  cap lens runs; dropped lenses are named, never
-//                            silently omitted. crosscheck cannot see tokens or
-//                            money (--exec is any command), so dispatches are
-//                            the only unit it can honestly cap.
+//                            silently omitted.
+//          --budget N        cap estimated INPUT tokens. Lenses run in roster
+//                            order until the estimate is spent; the rest are
+//                            named. The estimate covers the prompt crosscheck
+//                            builds — not the runner's preamble, its reasoning,
+//                            nor any output — and says so wherever it prints.
+//          --triage '<cmd>'  cheap pass over everything first, then the real
+//                            panel over only the files it flagged. Trades
+//                            recall for spend: what triage misses, the panel
+//                            never sees. The narrowing is always reported.
+//          --no-embed        do not inline source; name the files and let the
+//                            runner open them, as before 0.9.0.
+//          --hunk-context N  context lines around changed lines for a lens
+//                            declaring `scope: hunks` (default 6)
+//
+// A lens that finds nothing states what it examined, on COVERAGE lines before
+// its NO FINDINGS. A bare NO FINDINGS still parses and is reported as
+// unsupported: it is compatible with a clean file, a lens that could not
+// recognise the defect, and a lens whose questions exceed its runner, so it
+// forbids nothing and cannot be wrong. A lens may declare `invariants` in its
+// body to trade prose judgement for checks that can fail mechanically.
 //          --comment-file <f>  write a pull-request summary comment
 //          --no-cache        do not read or write .crosscheck/cache
 //          --cache-dir <dir> relocate the cache
@@ -61,7 +83,9 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { formatScore, score } from '../lib/calibrate.mjs';
 import { findConfig, mergeConfig, validateConfig } from '../lib/config.mjs';
-import { parseFrontmatter, resolveLensSet } from '../lib/lenses.mjs';
+import {
+  parseFrontmatter, parseInvariants, resolveLensSet, validateLens
+} from '../lib/lenses.mjs';
 import {
   applyVerdicts, countsBySeverity, lensOverlap, mergeFindings, panelVerdict
 } from '../lib/merge.mjs';
@@ -69,6 +93,7 @@ import { filterAgainstBaseline, staleBaselineEntries, toBaseline }
   from '../lib/baseline.mjs';
 import { parseReports } from '../lib/parse.mjs';
 import {
+  narrowRosterToFindings,
   planRun, promptsFor, resolveExec, runPanel, verifyFindings
 } from '../lib/run.mjs';
 import { cacheKey, createCache } from '../lib/cache.mjs';
@@ -86,7 +111,7 @@ function fail(message) {
 // to compare against something.
 const BOOLEAN_FLAGS = new Set([
   'dry-run', 'mixed', 'no-builtin', 'staged', 'verify', 'no-verify', 'diff',
-  'no-cache', 'force'
+  'no-cache', 'force', 'no-embed'
 ]);
 
 function parseArgs(argv) {
@@ -229,7 +254,15 @@ function loadLenses(dir) {
         `crosscheck: ignoring ${file} — no frontmatter with a name\n`);
       continue;
     }
-    lenses.push({ ...meta, definition: text, definitionPath: path });
+    const invariants = parseInvariants(text);
+    const checked = validateLens({ ...meta, invariants });
+    if (!checked.ok) {
+      // A half-written invariant is worse than none: it produces a lens that
+      // looks in the right place and declines to call what it finds a defect.
+      fail(`lens ${meta.name} (${path}) is invalid:\n  - ` +
+        checked.problems.join('\n  - '));
+    }
+    lenses.push({ ...meta, invariants, definition: text, definitionPath: path });
   }
   return lenses;
 }
@@ -334,11 +367,21 @@ function buildCache(options) {
   });
 }
 
-function execCommand(commandLine) {
+// The lens's identity and its declared reasoning effort are published to the
+// child as environment variables. crosscheck cannot know a given provider's flag
+// for reasoning depth — `--exec` is an arbitrary command — so it states the
+// intent and leaves the translation to the runner that knows its own CLI.
+function execCommand(commandLine, meta = {}) {
   return ({ prompt }) => new Promise((resolvePromise, rejectPromise) => {
     const child = spawn(commandLine, {
       shell: true,
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        CROSSCHECK_LENS: meta.lens ?? '',
+        CROSSCHECK_EFFORT: meta.effort ?? '',
+        CROSSCHECK_SCOPE: meta.scope ?? 'file'
+      }
     });
     let stdout = '';
     let stderr = '';
@@ -367,7 +410,7 @@ function buildMerged(options) {
   };
 }
 
-function report({ merged, suppressed, stale, refuted = [] }) {
+function report({ merged, suppressed, stale, refuted = [], untested = [] }) {
   const counts = countsBySeverity(merged.findings);
   const out = [];
   out.push('# Crosscheck report');
@@ -385,6 +428,35 @@ function report({ merged, suppressed, stale, refuted = [] }) {
   // Always stated, including zero: a finding that vanished without a count is
   // indistinguishable from one that was never found.
   out.push('', `Refuted in verification: ${refuted.length}.`);
+  if (untested.length) {
+    // Surviving a refutation attempt and never facing one are different
+    // standings for a finding, and only one of them is evidence.
+    out.push('', `Kept without a test: ${untested.length} — the verifier ` +
+      'returned no usable verdict, so these were neither refuted nor ' +
+      'corroborated: ' +
+      untested.map(f => `${f.file}:${f.line}`).join(', ') + '.');
+  }
+  if (merged.undemonstrated?.length) {
+    out.push('', '**Controls not caught: ' + merged.undemonstrated.map(u =>
+      `${u.lens} missed ${u.missed.join(', ')}`).join('; ') + '** — each lens ' +
+      'is given a known violation of its own invariant. Missing one shows the ' +
+      'runner cannot perform that check, so this lens found nothing because it ' +
+      'could not look, and its report carries no weight either way.');
+  }
+  if (merged.silent?.length) {
+    const unsupported = merged.unsupported ?? [];
+    const backed = merged.silent.filter(l => !unsupported.includes(l));
+    if (backed.length) {
+      out.push('', `Examined and found nothing: ${backed.join(', ')} — each ` +
+        'stated the sites it checked, so this is a negative result rather ' +
+        'than an absence.');
+    }
+    if (unsupported.length) {
+      out.push('', `Reported nothing, coverage unstated: ${unsupported.join(', ')}` +
+        '. For these, a clean file and a lens whose questions exceed its ' +
+        'runner produce the same output. Counted, not read as clean.');
+    }
+  }
   if (merged.unparsed.length) {
     out.push('', `Unparsed lens lines: ${merged.unparsed.length} ` +
       `(${[...new Set(merged.unparsed.map(u => u.lens))].join(', ')}).`);
@@ -409,8 +481,16 @@ function report({ merged, suppressed, stale, refuted = [] }) {
         (f.fix ? ` — ${f.fix}` : ''));
     }
   }
+  const participation = {
+    total: (merged.silent?.length ?? 0) + new Set(
+      merged.findings.flatMap(f => f.lenses ?? [])).size,
+    silent: merged.silent ?? [],
+    unsupported: merged.unsupported ?? [],
+    undemonstrated: merged.undemonstrated ?? []
+  };
   out.push('', '## Panel verdict',
-    `${panelVerdict(counts)} — ${counts.BLOCK} block, ${counts.FIX} fix, ` +
+    `${panelVerdict(counts, participation)} — ${counts.BLOCK} block, ` +
+    `${counts.FIX} fix, ` +
     `${counts.CONSIDER} consider; ` +
     `${merged.findings.filter(f => f.consensus).length} consensus.`);
   return out.join('\n') + '\n';
@@ -677,9 +757,36 @@ async function runCommand(cliOptions, positional) {
     fail('no lens matched the target; nothing to run');
   }
 
+  // Read every in-scope file once. The cache key already hashes these contents,
+  // so this is the same read done for one more reason rather than a new cost.
+  const embed = !options['no-embed'];
+  const sourceText = embed
+    ? Object.fromEntries(files.map(path => [
+      path, existsSync(path) ? readFileSync(path, 'utf8') : null
+    ]))
+    : null;
+  if (embed) {
+    const unreadable = Object.entries(sourceText)
+      .filter(([, content]) => content == null).map(([path]) => path);
+    if (unreadable.length) {
+      fail(`cannot read for review: ${unreadable.join(', ')}`);
+    }
+  }
+
   const promptOptions = {
     mixedCorpus: Boolean(options.mixed),
-    rangesByFile
+    rangesByFile,
+    sources: sourceText,
+    hunkContext: Number(options['hunk-context'] ?? 6)
+  };
+
+  // The cache key hashes file contents separately, so the prompt options it sees
+  // carry only the switches that change the prompt's shape.
+  const cacheablePromptOptions = {
+    mixedCorpus: promptOptions.mixedCorpus,
+    rangesByFile: promptOptions.rangesByFile,
+    embed,
+    hunkContext: promptOptions.hunkContext
   };
 
   if (options['dry-run']) {
@@ -699,12 +806,58 @@ async function runCommand(cliOptions, positional) {
       throw new Error(
         `no exec for lens "${lens}" — set exec, or an exec map entry for it`);
     }
-    return execCommand(commandLine)({ prompt, lens, files });
+    const meta = byLens.get(lens);
+    return execCommand(commandLine, {
+      lens, effort: meta?.effort, scope: meta?.scope
+    })({ prompt, lens, files });
   };
+
+  // Two-stage triage. A cheap runner sees the whole target; the real panel then
+  // sees only the files it flagged. Most code is clean, so most files never
+  // reach the expensive runner at all.
+  //
+  // The saving has a cost, and it is not hidden: a defect the cheap pass misses
+  // is a defect the expensive pass is never given the chance to find. Triage
+  // trades recall for spend, which is why it is opt-in and why the narrowing is
+  // always reported.
+  let panelRoster = roster;
+  if (options.triage) {
+    process.stderr.write(`crosscheck: triage pass — ${options.triage}\n`);
+    const triageDispatch = ({ prompt, lens, files }) => {
+      const meta = byLens.get(lens);
+      return execCommand(options.triage, {
+        lens, effort: meta?.effort ?? 'low', scope: meta?.scope
+      })({ prompt, lens, files });
+    };
+    const triaged = await runPanel({
+      roster,
+      skipped,
+      exec: triageDispatch,
+      concurrency: Number(options.concurrency ?? 4),
+      promptOptions,
+      onEstimate: line => process.stderr.write(`crosscheck: triage ${line}\n`),
+      onLensStart: lens => process.stderr.write(`  · ${lens}\n`),
+      onLensDone: (lens, r) => process.stderr.write(
+        r.ok
+          ? `  · ${lens} flagged ${r.findings} file-level hit(s)\n`
+          : `  ✗ ${lens} did not complete in triage\n`)
+    });
+    for (const f of triaged.failures) {
+      process.stderr.write(
+        `crosscheck: triage lens ${f.lens} failed — ${f.reason}\n`);
+    }
+    panelRoster = narrowRosterToFindings(roster, triaged.reports);
+    const kept = new Set(panelRoster.flatMap(l => l.files)).size;
+    process.stderr.write(panelRoster.length === 0
+      ? 'crosscheck: triage flagged nothing — the full panel did not run, so ' +
+        'this verdict is the cheap pass\'s\n'
+      : `crosscheck: triage narrowed the panel to ${kept} file(s) across ` +
+        `${panelRoster.length} lens(es)\n`);
+  }
 
   const cache = buildCache(options);
   const { reports, failures, dropped, cacheStats } = await runPanel({
-    roster,
+    roster: panelRoster,
     skipped,
     exec: dispatch,
     concurrency: Number(options.concurrency ?? 4),
@@ -723,6 +876,8 @@ async function runCommand(cliOptions, positional) {
       : null,
     maxDispatches: options['max-dispatches'] == null
       ? null : Number(options['max-dispatches']),
+    tokenBudget: options.budget == null ? null : Number(options.budget),
+    onEstimate: line => process.stderr.write(`crosscheck: ${line}\n`),
     onLensStart: lens => process.stderr.write(`  → ${lens}\n`),
     onLensDone: (lens, r) => process.stderr.write(
       r.ok
@@ -760,6 +915,7 @@ async function runCommand(cliOptions, positional) {
   // Verification is on by default for BLOCK findings: false positives cost more
   // than misses, because a panel that cries wolf stops being read at all.
   let refuted = [];
+  let untested = [];
   const verifyWanted = options['no-verify'] ? false : true;
   if (verifyWanted) {
     const candidates = merged.findings.filter(f =>
@@ -772,7 +928,9 @@ async function runCommand(cliOptions, positional) {
         exec: execCommand(options.exec),
         concurrency: Number(options.concurrency ?? 4),
         onVerdict: (f, v) => process.stderr.write(
-          `  ${v.refuted ? '✗ refuted' : '✓ confirmed'} ${f.file}:${f.line}\n`)
+          `  ${v.refuted ? '✗ refuted'
+            : v.tested === false ? '? not tested'
+              : '✓ survived refutation'} ${f.file}:${f.line}\n`)
       });
       for (const f of verifyFailures) {
         // A verifier that did not run is not agreement; the finding stands.
@@ -782,10 +940,16 @@ async function runCommand(cliOptions, positional) {
       }
       const applied = applyVerdicts(merged.findings, verdicts);
       refuted = applied.refuted;
+      untested = applied.untested;
       merged = { ...merged, findings: applied.findings };
       if (refuted.length) {
         process.stderr.write(
           `crosscheck: ${refuted.length} finding(s) refuted and removed\n`);
+      }
+      if (untested.length) {
+        process.stderr.write(
+          `crosscheck: ${untested.length} finding(s) kept without a test — ` +
+          'the verifier returned no usable verdict for them\n');
       }
     }
   }
@@ -799,7 +963,7 @@ async function runCommand(cliOptions, positional) {
     merged = { ...merged, findings: filtered.findings };
   }
 
-  process.stdout.write(report({ merged, suppressed, stale, refuted }));
+  process.stdout.write(report({ merged, suppressed, stale, refuted, untested }));
 
   if (options['comment-file']) {
     writeFileSync(options['comment-file'], buildComment({

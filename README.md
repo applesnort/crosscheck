@@ -162,6 +162,22 @@ worktree — without the rule having to exist upstream.
 A tool that costs real money per run gets switched off, and a switched-off tool
 finds nothing.
 
+**The prompt carries the source it reviews.** A lens prompt used to name its
+files and tell the runner to open them, which meant only an agent could run one.
+Pointed at a bare model with no file access, four lenses returned `NO FINDINGS`
+each against a fixture with seven planted defects — the model had nothing to look
+at. Since 0.9.0 the source is reproduced in the prompt, line-numbered, so any
+model endpoint can be a runner. `--no-embed` restores the older shape for an
+agent that prefers to read selectively.
+
+The source block leads the prompt and the lens definition follows it. Providers
+discount an input prefix that is byte-identical to a previous request, and files
+are sorted so that block is identical for every lens routed to the same set —
+which is where the panel's repetition stops being paid for twice.
+
+Two working runners are in [`examples/`](examples/) — one for a bare Ollama
+endpoint, one for the Codex CLI showing the per-lens effort contract.
+
 **A cheap lens should not pay for an expensive model.** `exec` may be a map:
 
 ```json
@@ -177,23 +193,62 @@ Precedence is the lens's own `exec` in its frontmatter, then the map entry, then
 `default`. A rostered lens with no command anywhere fails loudly and names itself
 — it is never quietly skipped.
 
+**A lens declares how much it needs to see.** `scope: hunks` in a lens's
+frontmatter sends only the changed lines plus context, which on a large file is
+the difference between reviewing forty lines and two thousand. It is wrong for
+any lens that follows data across a file or judges structure, so it is the lens
+author's call and not a global switch. `--hunk-context N` sets the margin.
+
+**A lens declares how hard to think.** `effort: low | medium | high` reaches the
+runner as `CROSSCHECK_EFFORT`, alongside `CROSSCHECK_LENS` and
+`CROSSCHECK_SCOPE`. crosscheck cannot know your provider's flag for reasoning
+depth — `--exec` is an arbitrary command — so it publishes the intent and your
+wrapper translates it. Leaving every lens at maximum reasoning is usually the
+largest bill nobody looks at.
+
 **Unchanged files are not re-reviewed.** Results are cached under
 `.crosscheck/cache`, keyed on the lens definition, the files, and their contents.
 The definition is part of the key deliberately: editing a lens must invalidate its
 results, or you would be served answers from the previous prompt with no way to
 tell. `--no-cache` disables it, `--cache-dir` relocates it. A failed lens is never
-cached, so it is retried rather than permanently wrong.
+cached, so it is retried rather than permanently wrong. In CI the cache directory
+has to be restored between runs or it does nothing at all.
 
-**`--max-dispatches N` caps the run, and says what it dropped:**
+**`--budget N` caps estimated input tokens, and says what it dropped:**
 
 ```
-crosscheck: BUDGET REACHED — 3 lens(es) not run: check, security-check, taint
+crosscheck: estimated input: ~10,939 tokens against a budget of 6,000 (estimate; ...)
+crosscheck: BUDGET REACHED — 2 lens(es) not run: security-check, taint
 ```
 
-The unit is dispatches, not dollars. crosscheck cannot see tokens or cost —
-`--exec` is an arbitrary command — so a monetary budget would be a number invented
-from nothing. Truncation is always named, because a run that quietly stopped early
-looks exactly like a run that found nothing.
+The estimate prints on every run, capped or not, because a user asked to justify
+the spend needs the number even when nothing is limiting it.
+
+It is called an estimate in those words wherever it appears. It counts the input
+crosscheck builds and nothing else: the runner's own preamble, its tool calls,
+its reasoning tokens and all of its output are outside what this can see. One
+measured agent CLI spent roughly 15,000 tokens before it read the prompt at all.
+Treat the number as a floor on input, not a bill.
+
+**`--max-dispatches N` caps the run by lens count** rather than by tokens, and
+names what it dropped the same way. Truncation is always named, because a run
+that quietly stopped early looks exactly like a run that found nothing.
+
+**`--triage '<cheap command>'` runs a cheap pass first.** The cheap runner sees
+the whole target; the real panel then sees only the files it flagged. Most code
+is clean, so most files never reach the expensive runner.
+
+```
+crosscheck run --diff --triage 'my-local-model' --exec 'claude -p'
+```
+
+The saving is a trade, and it is stated rather than buried: a defect the cheap
+pass misses is one the expensive pass never gets the chance to find. The
+narrowing is always reported, and a run where triage flagged nothing says
+outright that the verdict belongs to the cheap pass, not to the panel. A lens
+that *failed* during triage is not read as a clean file — its files go through to
+the panel, because a lens that died found nothing in the way a lens that looked
+and found nothing did not.
 
 ## SARIF output
 
@@ -217,6 +272,48 @@ That last point is the design rule throughout: **every omission is disclosed.** 
 lens skipped for irrelevance, a lens whose agent died, and a finding refuted during
 verification are three different things and must read differently. A partial panel
 presented as a complete one is worse than no panel.
+
+## What a report has to be able to be wrong about
+
+Every line crosscheck emits is an empirical claim, and a claim that forbids
+nothing observable tells a reader nothing however confidently it is worded. Four
+rules follow from that, and [ADR 0002](docs/adr/0002-falsifiability-as-a-design-constraint.md)
+records why.
+
+**An abstention states what it examined.** A lens finding nothing emits coverage
+lines naming the sites it checked:
+
+```
+COVERAGE: I2 — 3 equality sites on token values
+COVERAGE: I3 — 8 exported functions, 7 read their caller identity
+NO FINDINGS
+```
+
+A bare `NO FINDINGS` is compatible with a clean file, a lens that could not
+recognise the defect, and a lens whose questions exceed the runner it was given.
+It cannot be wrong, so it is not a claim. Coverage can be checked against the
+file and found false. Bare abstention still parses — breaking every existing
+lens would be worse — and is reported as unsupported, separately from an
+abstention that showed its work.
+
+This is not hypothetical. A local 8B model returned `NO FINDINGS` on all four
+lenses against `fixtures/calibration`, which carries seven planted defects, three
+of them `BLOCK`. The verdict read `Ship`.
+
+**A test that did not run is not a negative result.** A finding is refuted only
+by a verdict refuting it. A verifier that produced nothing usable leaves the
+finding standing, and standing-untested is reported apart from
+survived-a-refutation. Previously an unparseable verdict removed the finding
+while the same verifier exiting non-zero left it in place — the same absence,
+resolved two ways, and the destructive one was silent.
+
+**Corroboration is not verification.** A finding that survived refutation is
+described as having survived one. Never confirmed, proven, or validated.
+
+**Consensus counts tests, not voices.** An abstention naming its coverage is a
+lens that tested and found nothing, which is evidence. An abstention naming
+nothing is a lens whose testing cannot be established. The report separates them
+and the verdict follows.
 
 ## Why lenses instead of one review pass
 
@@ -314,6 +411,56 @@ produced by **both** lenses at once — both had to resolve a single opaque help
 both inferred its behaviour from its name. Independence of *method* does not give
 independence of *failure*.
 
+## Version benchmarks
+
+[`PREREGISTERED.md`](fixtures/calibration/PREREGISTERED.md) tests whether a
+*claim* holds. This tests whether a *release* is better than the one before it.
+They are different instruments and both are needed: six recorded rounds could
+all support the consensus claim while a release quietly got worse at finding
+things.
+
+| version | recall | precision | defects found | false positives |
+|---|---|---|---|---|
+| 0.8.0 | 85.7% | 58.3% | 6/7 | 5 |
+| 0.9.0 | 100% | 61.5% | 7/7 | 5 |
+
+Regenerate with:
+
+```sh
+node scripts/benchmark.mjs --versions main,WORKING --model gemma4:latest
+```
+
+**Read the absolute numbers with care.** This runs one small local model against
+the seven planted defects in `fixtures/calibration`. A capable agent runner
+scores 100% recall on the same fixture — that is in the pre-registered rounds.
+A weak model is deliberately the wrong instrument for "how good is crosscheck"
+and the right one for "did this version get worse", because it has room to move
+in both directions and costs nothing to run.
+
+Three things are held fixed, and the numbers mean nothing without them:
+
+- **One model**, local, temperature 0, fixed seed. A hosted model can change
+  under you between runs, which turns a regression suite into a log of someone
+  else's deploys.
+- **One fixture**, frozen. Adjusting ground truth after seeing which defects a
+  version bit is what makes a benchmark meaningless, and the pre-registration
+  rules it out by name.
+- **One scorer.** Every version is graded by the current checkout's `calibrate`
+  against the current `expected.json`. Letting each version grade itself would
+  measure changes to the scorer as though they were changes to the tool.
+
+Versions before 0.9.0 name files and expect the runner to open them, so the
+benchmark runner inlines source when a prompt did not carry it — the capability
+their contract assumed. Without that they score zero on everything, which is a
+fact about the runner and not about the version.
+
+**The rule this exists to enforce: a release has to demonstrate it improved
+something.** 0.9.0 first measured *worse* than 0.8.0 — recall 57.1% against
+85.7% — and shipping it would have been a regression nobody could see. The cause
+and the fix are in [ADR 0003](docs/adr/0003-lens-framing-before-source.md).
+Per-lens numbers are kept alongside the totals for the same reason: `architect`
+is still below its 0.8.0 recall, and the aggregate improvement hides it.
+
 ## What's here
 
 ```
@@ -405,7 +552,7 @@ $EDITOR .crosscheck/lenses/chaos.md
 npx @applesnort/crosscheck lenses     # what resolved, and from where
 ```
 
-A lens is a markdown file: five frontmatter keys, then the prompt.
+A lens is a markdown file: five required frontmatter keys, then the prompt.
 
 ```markdown
 ---
@@ -429,8 +576,56 @@ the reason printed. `not-owns` is required: a lens that never declines dilutes t
 signal everything else depends on. The body should end by restating the output
 contract, since that is what the parser expects back.
 
+Two optional keys control what a lens costs. `scope: hunks` sends it only the
+changed lines plus context instead of whole files — right for a lens judging
+line-level correctness, wrong for one that follows data across a file or judges
+structure. `effort: low | medium | high` reaches the runner as
+`CROSSCHECK_EFFORT` for your wrapper to translate into whatever your provider
+calls reasoning depth. Both are optional; both reject an unrecognised value
+rather than defaulting quietly, since a typo that silently does nothing bills you
+for a setting you believe is on.
+
 `crosscheck lenses` prints the resolved set with each lens's origin and globs,
 which is the fastest way to see why something did or did not run.
+
+### Invariants — how a lens lowers its own floor
+
+A lens asking a model to recognise a defect class needs a model that already
+recognises it. A lens asking it to enumerate sites and apply a stated rule needs
+much less. Declaring invariants is how a lens author makes that trade
+deliberately:
+
+```md
+## Invariants
+
+### I2 — a secret is compared in constant time
+
+**observe:** List every site comparing two values for equality where either
+operand is a secret, and name the operator or function each uses.
+
+**verdict:** `===` and `!==` on strings return as soon as they reach a differing
+byte, so how long the comparison takes reveals how many leading bytes matched. A
+secret compared with `===` or `!==` is a defect, including where the file defines
+a constant-time helper that this site does not call. Report BLOCK.
+```
+
+Both halves are required and a lens missing either fails to load. They fail
+differently: without `observe` there is nothing to check against the file;
+without `verdict` a model performs the observation correctly and then records
+the violation as acceptable, having been told what to find and not what it
+meant. That is a measured failure, not a hypothetical one.
+
+**Put the facts the rule needs inside the rule.** The measured pattern is that
+an invariant helps in proportion to how little the model must supply from its
+own knowledge. `security-check`'s I1 states that an attacker knows the arguments
+they sent and roughly when, and that hashing guessable inputs yields guessable
+output — because a model that had to know those failed the check.
+
+Measured on the calibration fixture with the same local 8B model:
+`security-check` found 0 of its 3 planted defects as prose, 0 again when a
+neutral prompt named exactly where to look, and reported all three as `BLOCK`
+with invariants. `calibrate` scores that last run 2 of 3 — one finding names the
+right defect but anchors a line outside the accepted span.
 
 ### Local lenses stay local
 

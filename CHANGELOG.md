@@ -12,6 +12,99 @@ they name what each version did rather than itemising every change in it.
 0.6.1 and 0.6.2 exist as versions in this repository but were never published,
 so a consumer resolving `@0.6` gets 0.6.0 and none of the fixes after it.
 
+## [0.9.0] — 2026-09-04
+
+Two themes. **Token cost:** crosscheck could not previously say anything about
+what a run would spend, because `--exec` is an arbitrary command and dispatches
+were the only unit it could cap. Embedding the source makes the input side
+knowable. **Falsifiability:** every output is an empirical claim, and three of
+them were compatible with any state of the file — see
+[ADR 0002](docs/adr/0002-falsifiability-as-a-design-constraint.md).
+
+### Added
+
+- **Source is embedded in lens prompts, and leads them.** A prompt used to name
+  its files and expect the runner to open them, so only an agent could run one;
+  a bare model returned `NO FINDINGS` on a fixture with seven planted defects
+  because it had nothing to look at. Source now appears in the prompt,
+  line-numbered, with files sorted so the block is byte-identical across every
+  lens routed to the same set — which is what a provider prefix cache needs.
+  `--no-embed` restores the previous prompt.
+- **`--budget N`** caps estimated input tokens, dropping lenses in roster order
+  and naming each one. The estimate prints on every run, capped or not, and is
+  labelled an estimate wherever it appears: it counts the prompt crosscheck
+  builds, never the runner's preamble, reasoning, or output.
+- **`--triage '<cheap command>'`** runs a cheap pass over the whole target, then
+  the real panel over only the files it flagged. The narrowing is always
+  reported, and a run where triage flagged nothing says the verdict is the cheap
+  pass's. A lens that failed during triage is not read as a clean file.
+- **`scope: hunks`** in lens frontmatter sends only changed lines plus context.
+  `--hunk-context N` sets the margin.
+- **`effort: low | medium | high`** in lens frontmatter reaches the runner as
+  `CROSSCHECK_EFFORT`, alongside `CROSSCHECK_LENS` and `CROSSCHECK_SCOPE`.
+- **ADR 0001** records the embedding decision, including the alternatives
+  rejected and what it costs when it is the wrong call.
+
+### Added — falsifiability
+
+- **Lens `invariants`.** A lens may declare invariants in its body, each pairing
+  an `observe:` rule with a `verdict:` rule. Both are required; a lens missing
+  either fails to load. This is how a lens lowers the capability its questions
+  demand. Measured on the calibration fixture with one local 8B model,
+  `security-check` found 0 of its 3 planted defects as prose and reported all
+  three as `BLOCK` with invariants (`calibrate` scores that run 2 of 3 — one
+  finding anchors a line outside the accepted span).
+- **`COVERAGE:` lines.** A lens that finds nothing states what it examined, so
+  declining to report becomes a claim a reader can check and find false. Bare
+  `NO FINDINGS` still parses and is reported as unsupported.
+- **`security-check` ships with three invariants**, each carrying the facts
+  needed to apply it rather than assuming the model supplies them.
+
+### Fixed
+
+- **An absent test is no longer a refutation.** An unparseable verifier verdict
+  removed the finding, while the same verifier exiting non-zero left it standing
+  — the same absence resolved two ways, and the destructive one was silent.
+  Verdicts now carry `tested`; untested findings stand and are reported apart
+  from ones that survived a refutation attempt.
+- **An abstaining panel no longer reads as a clean one.** Run against a fixture
+  with seven planted defects, three of them `BLOCK`, the panel previously said
+  `Ship`. Silent lenses are counted, named, and separated by whether they stated
+  coverage.
+- Coverage was parsed and then dropped by `runPanel` and `parseReports`, so
+  every abstention arrived looking unsupported.
+
+### Added — measurement
+
+- **`scripts/benchmark.mjs`** scores git refs against the calibration fixture on
+  a fixed local model, so a release has to demonstrate it improved something.
+  Results are in the README. This release measured *worse* than 0.8.0 on its
+  first run — recall 57.1% against 85.7% — and the cause is
+  [ADR 0003](docs/adr/0003-lens-framing-before-source.md).
+- Positive controls: an invariant may carry a `canary:`, a known violation of
+  itself placed in the lens's scope. Catching it shows the runner can perform
+  the check; missing it voids that lens's silence, though never a reported
+  blocker.
+
+### Changed
+
+- **The lens framing now precedes the source it reviews.** 0.9.0 originally led
+  with source so consecutive lenses shared a cacheable prefix. Measured on one
+  fixed model, `check` scored 0.0% recall that way against 57.1% with the
+  definition first. Cross-lens prefix caching is given up: it was an inferred
+  saving, and this was a measured loss. Supersedes the ordering half of ADR 0001.
+- `--max-dispatches` no longer describes itself as the only unit that can be
+  capped; `--budget` now caps tokens. Both still name what they dropped.
+- An unreadable in-scope file stops the run rather than being reviewed as a gap.
+- Verdict objects gained `tested`; `parseLensOutput` results gained `coverage`.
+  Both are additive, but a caller doing an exact-shape comparison will see them.
+
+### Notes
+
+Embedding sends the whole in-scope source for each routing group, whether or not
+a runner would have opened all of it. For a large file set against an agent that
+reads selectively this can cost more than it saves — `--no-embed` is the exit.
+
 ## [0.8.0] — unreleased
 
 ### Fixed
