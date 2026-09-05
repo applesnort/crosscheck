@@ -411,6 +411,12 @@ function report({ merged, suppressed, stale, refuted = [] }) {
   // Always stated, including zero: a finding that vanished without a count is
   // indistinguishable from one that was never found.
   out.push('', `Refuted in verification: ${refuted.length}.`);
+  if (merged.silent?.length) {
+    out.push('', `Reported nothing: ${merged.silent.join(', ')}. A lens that ` +
+      'examined its scope and found nothing is indistinguishable here from one ' +
+      'whose questions are beyond the runner it was given. Silence is counted, ' +
+      'not read as clean.');
+  }
   if (merged.unparsed.length) {
     out.push('', `Unparsed lens lines: ${merged.unparsed.length} ` +
       `(${[...new Set(merged.unparsed.map(u => u.lens))].join(', ')}).`);
@@ -435,8 +441,14 @@ function report({ merged, suppressed, stale, refuted = [] }) {
         (f.fix ? ` — ${f.fix}` : ''));
     }
   }
+  const participation = {
+    total: (merged.silent?.length ?? 0) + new Set(
+      merged.findings.flatMap(f => f.lenses ?? [])).size,
+    silent: merged.silent ?? []
+  };
   out.push('', '## Panel verdict',
-    `${panelVerdict(counts)} — ${counts.BLOCK} block, ${counts.FIX} fix, ` +
+    `${panelVerdict(counts, participation)} — ${counts.BLOCK} block, ` +
+    `${counts.FIX} fix, ` +
     `${counts.CONSIDER} consider; ` +
     `${merged.findings.filter(f => f.consensus).length} consensus.`);
   return out.join('\n') + '\n';
