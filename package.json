@@ -30,6 +30,7 @@
     "bin/",
     "lib/",
     "lenses/",
+    "examples/",
     "fixtures/calibration/",
     "foreman.md",
     "PROVENANCE.md",

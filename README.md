@@ -175,6 +175,9 @@ discount an input prefix that is byte-identical to a previous request, and files
 are sorted so that block is identical for every lens routed to the same set —
 which is where the panel's repetition stops being paid for twice.
 
+Two working runners are in [`examples/`](examples/) — one for a bare Ollama
+endpoint, one for the Codex CLI showing the per-lens effort contract.
+
 **A cheap lens should not pay for an expensive model.** `exec` may be a map:
 
 ```json
