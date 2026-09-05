@@ -436,6 +436,13 @@ function report({ merged, suppressed, stale, refuted = [], untested = [] }) {
       'corroborated: ' +
       untested.map(f => `${f.file}:${f.line}`).join(', ') + '.');
   }
+  if (merged.undemonstrated?.length) {
+    out.push('', '**Controls not caught: ' + merged.undemonstrated.map(u =>
+      `${u.lens} missed ${u.missed.join(', ')}`).join('; ') + '** — each lens ' +
+      'is given a known violation of its own invariant. Missing one shows the ' +
+      'runner cannot perform that check, so this lens found nothing because it ' +
+      'could not look, and its report carries no weight either way.');
+  }
   if (merged.silent?.length) {
     const unsupported = merged.unsupported ?? [];
     const backed = merged.silent.filter(l => !unsupported.includes(l));
@@ -478,7 +485,8 @@ function report({ merged, suppressed, stale, refuted = [], untested = [] }) {
     total: (merged.silent?.length ?? 0) + new Set(
       merged.findings.flatMap(f => f.lenses ?? [])).size,
     silent: merged.silent ?? [],
-    unsupported: merged.unsupported ?? []
+    unsupported: merged.unsupported ?? [],
+    undemonstrated: merged.undemonstrated ?? []
   };
   out.push('', '## Panel verdict',
     `${panelVerdict(counts, participation)} — ${counts.BLOCK} block, ` +

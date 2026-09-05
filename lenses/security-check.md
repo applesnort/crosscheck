@@ -92,6 +92,10 @@ caller-supplied values, clock readings and constants is reproducible by anyone
 holding those. Hashing does not repair this — a digest of guessable inputs is
 guessable by digesting the guesses. Report BLOCK.
 
+**canary:** export function issueKey(accountId) {
+  return createHash('sha256').update(`${accountId}:${Date.now()}`).digest('hex');
+}
+
 ### I2 — a secret is compared in constant time
 
 **observe:** List every site comparing two values for equality where either
@@ -101,6 +105,10 @@ operand is a secret, and name the operator or function each uses.
 byte, so how long the comparison takes reveals how many leading bytes matched. A
 secret compared with `===` or `!==` is a defect, including where the file
 defines a constant-time helper that this site does not call. Report BLOCK.
+
+**canary:** export function keyMatches(supplied, stored) {
+  return supplied === stored;
+}
 
 ### I3 — a read of an owned asset checks the caller
 
@@ -112,6 +120,10 @@ line of its body where that parameter name appears.
 line of the body means the function performs no authorization check, and any
 caller holding a reference reads another principal's data. Report BLOCK. Do not
 record it as acceptable or note it only for completeness.
+
+**canary:** export function readPrivateNote(store, noteOwnerId, callerUserId) {
+  return store.notes.get(noteOwnerId);
+}
 
 ## Project specifics
 
