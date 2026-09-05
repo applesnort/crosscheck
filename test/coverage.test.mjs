@@ -39,3 +39,30 @@ test('a malformed coverage line is unparsed, not silently dropped', () => {
   assert.equal(r.coverage.length, 0);
   assert.equal(r.unparsed.length, 1);
 });
+
+import { mergeFindings, panelVerdict, countsBySeverity } from '../lib/merge.mjs';
+
+const abstain = (lens, coverage = []) => ({ lens, findings: [], unparsed: [], coverage });
+
+test('an abstention backed by coverage is separated from a bare one', () => {
+  const m = mergeFindings([
+    abstain('taint', [{ id: 'scope', examined: 'all 8 call sites' }]),
+    abstain('architect')
+  ]);
+  assert.deepEqual(m.silent.sort(), ['architect', 'taint']);
+  assert.deepEqual(m.unsupported, ['architect'],
+    'only the abstention that showed no work is unsupported');
+});
+
+test('a panel abstaining entirely without coverage is not a pass', () => {
+  const v = panelVerdict(countsBySeverity([]),
+    { total: 2, silent: ['a', 'b'], unsupported: ['a', 'b'] });
+  assert.match(v, /No signal/);
+});
+
+test('a panel that abstained but showed its work says so differently', () => {
+  const v = panelVerdict(countsBySeverity([]),
+    { total: 2, silent: ['a', 'b'], unsupported: [] });
+  assert.doesNotMatch(v, /No signal/);
+  assert.match(v, /coverage|examined/i);
+});

@@ -430,10 +430,18 @@ function report({ merged, suppressed, stale, refuted = [], untested = [] }) {
       untested.map(f => `${f.file}:${f.line}`).join(', ') + '.');
   }
   if (merged.silent?.length) {
-    out.push('', `Reported nothing: ${merged.silent.join(', ')}. A lens that ` +
-      'examined its scope and found nothing is indistinguishable here from one ' +
-      'whose questions are beyond the runner it was given. Silence is counted, ' +
-      'not read as clean.');
+    const unsupported = merged.unsupported ?? [];
+    const backed = merged.silent.filter(l => !unsupported.includes(l));
+    if (backed.length) {
+      out.push('', `Examined and found nothing: ${backed.join(', ')} — each ` +
+        'stated the sites it checked, so this is a negative result rather ' +
+        'than an absence.');
+    }
+    if (unsupported.length) {
+      out.push('', `Reported nothing, coverage unstated: ${unsupported.join(', ')}` +
+        '. For these, a clean file and a lens whose questions exceed its ' +
+        'runner produce the same output. Counted, not read as clean.');
+    }
   }
   if (merged.unparsed.length) {
     out.push('', `Unparsed lens lines: ${merged.unparsed.length} ` +
@@ -462,7 +470,8 @@ function report({ merged, suppressed, stale, refuted = [], untested = [] }) {
   const participation = {
     total: (merged.silent?.length ?? 0) + new Set(
       merged.findings.flatMap(f => f.lenses ?? [])).size,
-    silent: merged.silent ?? []
+    silent: merged.silent ?? [],
+    unsupported: merged.unsupported ?? []
   };
   out.push('', '## Panel verdict',
     `${panelVerdict(counts, participation)} — ${counts.BLOCK} block, ` +
