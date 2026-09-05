@@ -334,11 +334,21 @@ function buildCache(options) {
   });
 }
 
-function execCommand(commandLine) {
+// The lens's identity and its declared reasoning effort are published to the
+// child as environment variables. crosscheck cannot know a given provider's flag
+// for reasoning depth — `--exec` is an arbitrary command — so it states the
+// intent and leaves the translation to the runner that knows its own CLI.
+function execCommand(commandLine, meta = {}) {
   return ({ prompt }) => new Promise((resolvePromise, rejectPromise) => {
     const child = spawn(commandLine, {
       shell: true,
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        CROSSCHECK_LENS: meta.lens ?? '',
+        CROSSCHECK_EFFORT: meta.effort ?? '',
+        CROSSCHECK_SCOPE: meta.scope ?? 'file'
+      }
     });
     let stdout = '';
     let stderr = '';
@@ -726,7 +736,10 @@ async function runCommand(cliOptions, positional) {
       throw new Error(
         `no exec for lens "${lens}" — set exec, or an exec map entry for it`);
     }
-    return execCommand(commandLine)({ prompt, lens, files });
+    const meta = byLens.get(lens);
+    return execCommand(commandLine, {
+      lens, effort: meta?.effort, scope: meta?.scope
+    })({ prompt, lens, files });
   };
 
   const cache = buildCache(options);
