@@ -763,6 +763,8 @@ async function runCommand(cliOptions, positional) {
       : null,
     maxDispatches: options['max-dispatches'] == null
       ? null : Number(options['max-dispatches']),
+    tokenBudget: options.budget == null ? null : Number(options.budget),
+    onEstimate: line => process.stderr.write(`crosscheck: ${line}\n`),
     onLensStart: lens => process.stderr.write(`  → ${lens}\n`),
     onLensDone: (lens, r) => process.stderr.write(
       r.ok
