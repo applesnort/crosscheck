@@ -114,10 +114,14 @@ test('a lens with invariants must report coverage when it abstains', () => {
   assert.match(p, /COVERAGE:/);
   // The abstention has to forbid something, or it is compatible with a lens
   // that never looked.
-  assert.match(p, /NO FINDINGS[\s\S]*Before that line[\s\S]*COVERAGE/);
-  // And the coverage instruction is last on purpose: a trailing NO FINDINGS is
-  // the cheapest compliant output, which is how four lenses went silent.
-  assert.ok(p.lastIndexOf('COVERAGE') > p.lastIndexOf('NO FINDINGS'));
+  assert.match(p, /COVERAGE[\s\S]*NO FINDINGS/);
+  // Ordering was measured twice. A trailing NO FINDINGS made abstention the
+  // salient act and four lenses went silent. Then a trailing COVERAGE made
+  // stating coverage the salient act, and two lenses without invariants lost
+  // most of their recall against the calibration fixture. What ends the prompt
+  // is the instruction to report findings.
+  const last = p.slice(p.lastIndexOf('COVERAGE'));
+  assert.match(last, /Finding them is the task/);
 });
 
 test('a lens without invariants keeps the plain contract', () => {

@@ -44,7 +44,17 @@ const ROOT = resolve(process.cwd());
 const git = (...a) => execFileSync('git', a, { cwd: ROOT, encoding: 'utf8' }).trim();
 const log = (m) => process.stderr.write(`benchmark: ${m}\n`);
 
+// `WORKING` scores the working tree as it stands. Without it the harness can
+// only measure commits, which makes it useless for the loop it exists to serve:
+// change a prompt, measure, keep or discard. A worktree checkout of HEAD
+// silently ignores uncommitted work and returns the previous version's numbers,
+// which reads as "the change did nothing".
+const WORKING = 'WORKING';
+
 function versionOf(ref) {
+  if (ref === WORKING) {
+    return `${JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version}+wip`;
+  }
   try {
     return JSON.parse(git('show', `${ref}:package.json`)).version;
   } catch { return ref; }
@@ -54,8 +64,10 @@ function versionOf(ref) {
 // state of the working tree it was launched from.
 function runVersion(ref) {
   const dir = mkdtempSync(join(tmpdir(), 'cc-bench-'));
-  const worktree = join(dir, 'wt');
-  git('worktree', 'add', '--detach', worktree, ref);
+  const worktree = ref === WORKING ? ROOT : join(dir, 'wt');
+  if (ref !== WORKING) {
+    git('worktree', 'add', '--detach', worktree, ref);
+  }
   try {
     const runJson = join(dir, 'run.json');
     execFileSync('node', [
@@ -127,9 +139,11 @@ for (const ref of VERSIONS) {
     log(`  recall ${s.recall}%  precision ${s.precision}%  fp ${s.falsePositives}`);
     results.runs.push({ ref, version, completed: true, ...s });
   }
-  try {
-    git('worktree', 'remove', '--force', worktree);
-  } catch { /* the worktree is in a temp dir either way */ }
+  if (ref !== 'WORKING') {
+    try {
+      git('worktree', 'remove', '--force', worktree);
+    } catch { /* the worktree is in a temp dir either way */ }
+  }
   rmSync(dir, { recursive: true, force: true });
 }
 

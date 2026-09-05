@@ -1,0 +1,33 @@
+{
+  "corpus": "fixtures/calibration",
+  "model": "gemma4:latest",
+  "scorer": "0.9.0",
+  "generated": "2026-09-05",
+  "note": "One fixed local model at temperature 0, one frozen fixture, one scorer. Versions before 0.9.0 name files rather than embedding them and are run with a file-reading runner, which is the capability their contract assumed.",
+  "runs": [
+    {
+      "ref": "main",
+      "version": "0.8.0",
+      "completed": true,
+      "planted": 7,
+      "found": 6,
+      "recall": 85.7,
+      "reported": 12,
+      "precision": 58.3,
+      "falsePositives": 5,
+      "raw": "defects planted:   7\ndefects found:     6  (recall 85.7%)\nfindings reported: 12  (precision 58.3%)\nfalse positives:   5\n\nmissed:\n  - timing-unsafe-compare (expected from security-check)\n\nseverity mismatches:\n  - predictable-token: expected BLOCK, reported FIX\n  - expires-as-number: expected BLOCK, reported FIX\n  - unguarded-expiry-read: expected BLOCK, reported FIX\n  - missing-ownership-check: expected BLOCK, reported FIX\n  - expires-as-number: expected BLOCK, reported CONSIDER\n\nconsensus vs solo precision — if these are equal, consensus ranking is\ndecoration and should be dropped or reweighted:\n  consensus (1): 100.0%\n  solo      (11): 54.5%\n\nper lens:\n  architect        recall 100.0% (3/3)   precision  66.7% (2 fp of 6)\n  check            recall  66.7% (4/6)   precision  57.1% (3 fp of 7)\n"
+    },
+    {
+      "ref": "WORKING",
+      "version": "0.9.0+wip",
+      "completed": true,
+      "planted": 7,
+      "found": 7,
+      "recall": 100,
+      "reported": 13,
+      "precision": 61.5,
+      "falsePositives": 5,
+      "raw": "defects planted:   7\ndefects found:     7  (recall 100.0%)\nfindings reported: 13  (precision 61.5%)\nfalse positives:   5\n\nseverity mismatches:\n  - predictable-token: expected BLOCK, reported FIX\n  - expires-as-number: expected BLOCK, reported FIX\n  - unguarded-expiry-read: expected BLOCK, reported CONSIDER\n  - missing-ownership-check: expected BLOCK, reported CONSIDER\n\nconsensus vs solo precision — if these are equal, consensus ranking is\ndecoration and should be dropped or reweighted:\n  consensus (1): 100.0%\n  solo      (12): 58.3%\n\nper lens:\n  architect        recall  66.7% (2/3)   precision  60.0% (2 fp of 5)\n  check            recall  66.7% (4/6)   precision  57.1% (3 fp of 7)\n  security-check   recall  50.0% (2/4)   precision 100.0% (0 fp of 2)\n"
+    }
+  ]
+}

@@ -27,13 +27,18 @@ test('embed line-numbers the source so findings can cite a line', () => {
   assert.match(p, /\b2\s+export \{ b \};/);
 });
 
-test('the source block is byte-identical across lenses on the same files', () => {
+// Supersedes an assertion that both prompts OPENED with this block. Leading
+// with source was chosen for cache sharing and measured worse: `check` scored
+// 0.0% recall with source first against 57.1% with the lens definition first.
+// The block is still rendered identically for the same file set; it is no
+// longer first, so it is no longer a cacheable prefix. See ADR 0003.
+test('the source block is rendered identically for the same file set', () => {
   const a = buildLensPrompt(lensA, files, { definition: def, sources });
   const b = buildLensPrompt(lensB, files, { definition: 'different', sources });
-  const prefix = sharedSourcePrefix(files, { sources });
-  assert.ok(prefix.length > 0, 'prefix must not be empty');
-  assert.ok(a.startsWith(prefix), 'lens A must open with the shared prefix');
-  assert.ok(b.startsWith(prefix), 'lens B must open with the shared prefix');
+  const block = sharedSourcePrefix(files, { sources });
+  assert.ok(block.length > 0);
+  assert.ok(a.includes(block), 'lens A carries the block verbatim');
+  assert.ok(b.includes(block), 'lens B carries the block verbatim');
 });
 
 test('file order is sorted, so the prefix does not depend on caller order', () => {
@@ -43,10 +48,10 @@ test('file order is sorted, so the prefix does not depend on caller order', () =
   assert.ok(one.indexOf('src/a.js') < one.indexOf('src/b.js'));
 });
 
-test('the lens definition comes after the source, never before', () => {
+test('the lens definition comes before the source, never after', () => {
   const p = buildLensPrompt(lensA, files, { definition: def, sources });
-  assert.ok(p.indexOf('const a = 2;') < p.indexOf('Body of the lens.'),
-    'source must precede the lens definition or nothing caches');
+  assert.ok(p.indexOf('Body of the lens.') < p.indexOf('const a = 2;'),
+    'a model that reads the code before learning its lens reads it as nobody');
 });
 
 test('embedding tells the runner not to open files', () => {

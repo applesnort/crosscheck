@@ -46,17 +46,14 @@ test('the control block is rendered under a path of its own', () => {
   assert.match(p, /a === b/, 'the canary source is present');
 });
 
-test('the control block does not enter the cacheable shared prefix', () => {
-  // Controls are per-lens; putting them in the shared source block would give
-  // every lens a different prefix and cost the caching the block exists for.
+test('controls are rendered apart from the reviewed source', () => {
+  // Controls are per-lens and must stay distinguishable from the repository
+  // under review, so a finding about a canary is never a finding about code.
   const withInv = buildLensPrompt(
     { name: 'x', owns: 'o', invariants: parseInvariants(body) },
     ['a.js'], { definition: '# L\n\nb', sources: { 'a.js': 'const a = 1;\n' } });
-  const plain = buildLensPrompt(
-    { name: 'y', owns: 'o' },
-    ['a.js'], { definition: '# L\n\nb', sources: { 'a.js': 'const a = 1;\n' } });
-  const shared = plain.slice(0, plain.indexOf('--- END SOURCE ---'));
-  assert.ok(withInv.startsWith(shared), 'prefix is unchanged by controls');
+  assert.ok(withInv.indexOf('--- END SOURCE ---') <
+    withInv.indexOf(CONTROL_PREFIX), 'controls follow the reviewed source');
 });
 
 test('control findings are separated from findings about real code', () => {
